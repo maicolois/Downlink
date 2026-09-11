@@ -6,7 +6,6 @@ export function createWaveBackground(canvas) {
   const fallback = {
     resize: noop,
     setActive: noop,
-    setReducedMotion: noop,
     setPointer: noop,
     clearPointer: noop,
     destroy: noop,
@@ -25,7 +24,6 @@ export function createWaveBackground(canvas) {
   let columns = 64;
   let mobile = false;
   let active = false;
-  let reducedMotion = false;
   let destroyed = false;
   let frame = null;
   let lastPaint = null;
@@ -50,10 +48,10 @@ export function createWaveBackground(canvas) {
 
   function draw(delta = 0) {
     context.clearRect(0, 0, width, height);
-    const time = reducedMotion ? 0 : elapsed;
+    const time = elapsed;
     const radius = mobile ? 150 : 205;
     const radiusSquared = radius * radius;
-    const interaction = pointer.active && !reducedMotion;
+    const interaction = pointer.active;
     let dragX = 0;
     let dragY = 0;
 
@@ -104,15 +102,15 @@ export function createWaveBackground(canvas) {
           }
         }
 
-        if (delta > 0 && !reducedMotion) {
+        if (delta > 0) {
           // A damped spring keeps each strand fluid as the cursor moves away.
           velocityX[index] += ((targetX - displacementX[index]) * 95 - velocityX[index] * 17) * delta;
           velocityY[index] += ((targetY - displacementY[index]) * 95 - velocityY[index] * 17) * delta;
           displacementX[index] += velocityX[index] * delta;
           displacementY[index] += velocityY[index] * delta;
         }
-        pointsX[index] = baseX + (reducedMotion ? 0 : displacementX[index]);
-        pointsY[index] = baseY + (reducedMotion ? 0 : displacementY[index]);
+        pointsX[index] = baseX + displacementX[index];
+        pointsY[index] = baseY + displacementY[index];
       }
 
       const opacity = 0.13 + (0.5 + Math.sin(row * 0.43) * 0.5) * 0.065 + rowInfluence * 0.12;
@@ -159,7 +157,7 @@ export function createWaveBackground(canvas) {
 
   function animate(timestamp) {
     frame = null;
-    if (!active || reducedMotion || destroyed) return;
+    if (!active || destroyed) return;
     const interval = 1000 / (mobile ? 30 : 60);
     if (lastPaint === null || timestamp - lastPaint >= interval - 0.5) {
       const delta = lastPaint === null ? 1 / 60 : Math.min((timestamp - lastPaint) / 1000, 0.05);
@@ -171,7 +169,7 @@ export function createWaveBackground(canvas) {
   }
 
   function start() {
-    if (active && !reducedMotion && !destroyed && frame === null) {
+    if (active && !destroyed && frame === null) {
       frame = window.requestAnimationFrame(animate);
     }
   }
@@ -202,32 +200,15 @@ export function createWaveBackground(canvas) {
     if (destroyed || active === Boolean(value)) return;
     active = Boolean(value);
     if (active) {
-      if (reducedMotion) draw();
-      else start();
+      start();
     } else {
       stop();
       clearPointer();
     }
   }
 
-  function setReducedMotion(value) {
-    if (destroyed || reducedMotion === Boolean(value)) return;
-    reducedMotion = Boolean(value);
-    clearPointer();
-    displacementX.fill(0);
-    displacementY.fill(0);
-    velocityX.fill(0);
-    velocityY.fill(0);
-    if (reducedMotion) {
-      stop();
-      draw();
-    } else {
-      start();
-    }
-  }
-
   function setPointer(x, y) {
-    if (!active || reducedMotion || destroyed || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    if (!active || destroyed || !Number.isFinite(x) || !Number.isFinite(y)) return;
     if (!pointer.active) {
       pointer.x = x;
       pointer.y = y;
@@ -246,5 +227,5 @@ export function createWaveBackground(canvas) {
   }
 
   resize();
-  return { resize, setActive, setReducedMotion, setPointer, clearPointer, destroy };
+  return { resize, setActive, setPointer, clearPointer, destroy };
 }

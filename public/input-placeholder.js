@@ -1,7 +1,6 @@
 const PLATFORMS = ['YouTube', 'Instagram', 'TikTok', 'X', 'Reddit', 'Twitch'];
 const HOLD_DURATION = 3000;
 const FADE_DURATION = 900;
-const REDUCED_FADE_DURATION = 750;
 
 export function initializeInputPlaceholder(input) {
   const placeholder = input.parentElement.querySelector('.home-controls__placeholder');
@@ -9,7 +8,6 @@ export function initializeInputPlaceholder(input) {
   const word = option?.querySelector('.home-controls__placeholder-word');
   if (!word) return { sync() {}, destroy() {} };
 
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let index = 0;
   let timer = null;
   let fade = null;
@@ -27,8 +25,7 @@ export function initializeInputPlaceholder(input) {
   }
 
   function fadeTo(from, to, complete) {
-    // Keep the requested opacity fade in reduced-motion mode, without shimmer or movement.
-    const duration = reducedMotion.matches ? REDUCED_FADE_DURATION : FADE_DURATION;
+    const duration = FADE_DURATION;
     if (typeof option.animate === 'function') {
       try {
         // Fade the platform and both quotation marks together, keeping the prompt fixed.
@@ -78,7 +75,7 @@ export function initializeInputPlaceholder(input) {
     const visible = input.value.length === 0 && !input.disabled;
     input.classList.toggle('has-animated-placeholder', visible);
     const shouldRotate = visible && !document.hidden;
-    placeholder.classList.toggle('is-animating', shouldRotate && !reducedMotion.matches);
+    placeholder.classList.toggle('is-animating', shouldRotate);
     if (!shouldRotate) {
       stop();
     } else if (!running) {
@@ -87,18 +84,11 @@ export function initializeInputPlaceholder(input) {
     }
   }
 
-  function handleMotionChange() {
-    // Apply the shorter fade and disable shimmer without stopping the rotation.
-    stop();
-    sync();
-  }
-
   // Focus keeps the animation visible until the user actually enters a value.
   // The native placeholder stays intact as a fallback and for CSS button states.
   // Only this decorative layer changes; no values or input events are generated.
   ['focus', 'blur', 'input'].forEach(event => input.addEventListener(event, sync));
   document.addEventListener('visibilitychange', sync);
-  reducedMotion.addEventListener('change', handleMotionChange);
   sync();
 
   return {
@@ -109,7 +99,6 @@ export function initializeInputPlaceholder(input) {
       input.classList.remove('has-animated-placeholder');
       ['focus', 'blur', 'input'].forEach(event => input.removeEventListener(event, sync));
       document.removeEventListener('visibilitychange', sync);
-      reducedMotion.removeEventListener('change', handleMotionChange);
     },
   };
 }

@@ -1027,20 +1027,3 @@ body:has(.profile-gate[open]) {
     grid-template-columns: var(--profile-edit-avatar-size) minmax(0, 1fr);
   }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .profile-control__chevron,
-  .profile-control__avatar,
-  .profile-card__avatar,
-  .profile-card__add-mark,
-  .profile-card__name,
-  .profile-editor__avatar-edit,
-  .profile-editor__save {
-    transition: none;
-  }
-
-  .profile-menu,
-  .profile-gate[open] {
-    animation: none;
-  }
-}

@@ -608,10 +608,7 @@ function renderQualityOptions(animateGrid = false) {
   // Update download button text
   updateDownloadBtn();
 
-  if (
-    previousHeight !== null &&
-    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  ) {
+  if (previousHeight !== null) {
     const nextHeight = qualityGrid.getBoundingClientRect().height;
 
     if (Math.abs(nextHeight - previousHeight) > 1) {
