@@ -4,7 +4,7 @@ import express from 'express';
 import fs from 'node:fs/promises';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
-import { createInstagramAuth } from '../server/instagram-auth.js';
+import { createInstagramAuth } from '../server/auth/instagram-auth.js';
 
 const COOKIE_NAME = 'uc_instagram_session';
 const instant = 1_800_000_000_000;

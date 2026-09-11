@@ -2,11 +2,11 @@
   "name": "downlink",
   "version": "1.2.0",
   "description": "Downlink — Conversor de YouTube, X, Instagram, TikTok, Reddit y Twitch a MP3/MP4",
-  "main": "server.js",
+  "main": "server/index.js",
   "type": "module",
   "scripts": {
-    "dev": "node --watch server.js",
-    "start": "node server.js",
+    "dev": "node --watch server/index.js",
+    "start": "node server/index.js",
     "test": "node --test tests/*.test.js"
   },
   "dependencies": {

@@ -6,11 +6,11 @@ const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const AVATAR_SIZE = 256;
 const DEFAULT_AVATAR = 'ember';
 const PRESET_AVATAR_IMAGES = Object.freeze({
-  ember: '/media/avatars/ember-fox.webp',
-  ocean: '/media/avatars/ocean-otter.webp',
-  violet: '/media/avatars/violet-robot.webp',
-  forest: '/media/avatars/forest-frog.webp',
-  sunset: '/media/avatars/sunset-cat.webp',
+  ember: '/assets/avatars/ember-fox.webp',
+  ocean: '/assets/avatars/ocean-otter.webp',
+  violet: '/assets/avatars/violet-robot.webp',
+  forest: '/assets/avatars/forest-frog.webp',
+  sunset: '/assets/avatars/sunset-cat.webp',
 });
 const PRESET_AVATARS = new Set(Object.keys(PRESET_AVATAR_IMAGES));
 const ALLOWED_PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);

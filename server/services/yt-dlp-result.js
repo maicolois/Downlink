@@ -1,4 +1,4 @@
-import { parseVideoInfoCollection } from './platforms/common/video-metadata.js';
+import { parseVideoInfoCollection } from '../platforms/common/video-metadata.js';
 
 export function getYtDlpInfoOutput({ code, stdout, stderr }, { allowPartialPlaylist = false } = {}) {
   if (code === 0) return stdout;

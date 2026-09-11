@@ -20,7 +20,7 @@ test('connected accounts isolate metadata, private downloads and revocation thro
   const port = socket.address().port;
   await new Promise(resolve => socket.close(resolve));
   const base = `http://127.0.0.1:${port}`;
-  const child = spawn(process.execPath, ['--import', './tests/fixtures/instagram-login.mjs', 'server.js'], {
+  const child = spawn(process.execPath, ['--import', './tests/fixtures/instagram-login.mjs', 'server/index.js'], {
     cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, PORT: String(port), YT_DLP_PATH: 'instagram-story-test-extractor',
       INSTAGRAM_COOKIES_FILE: '', STORY_FIXTURE_LOG: logPath },

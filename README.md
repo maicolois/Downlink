@@ -9,6 +9,25 @@ npm run dev
 
 Abre `http://localhost:3000`.
 
+## Estructura del proyecto
+
+```text
+public/
+  assets/       # Avatares, iconos y recursos gráficos públicos
+  css/          # Estilos de la interfaz
+  js/           # Código del navegador, separado por componentes y fondos
+references/
+  backgrounds/  # Vídeos usados como referencia visual; no se sirven al navegador
+server/
+  auth/         # Autenticación y sesiones
+  platforms/    # Integraciones organizadas por plataforma
+  services/     # Servicios reutilizables del backend
+shared/         # Código compartido entre navegador y servidor
+tests/          # Pruebas automatizadas y sus fixtures
+```
+
+Los directorios `bin/` y `downloads/` se crean durante la ejecución y no se incluyen en Git. El fondo anterior se conserva como `public/js/backgrounds/wave-background.js` para poder reutilizarlo.
+
 ## Perfiles locales
 
 Al entrar por primera vez, crea un perfil con un nombre, un color o una foto. No usa contraseñas: los perfiles y su avatar se guardan únicamente en el almacenamiento local de ese navegador. Desde el avatar de la esquina superior derecha puedes cambiar de perfil, editarlo, gestionar la conexión de Instagram o salir.

@@ -4,7 +4,7 @@ import {
   formatDownloadProgress,
   formatDownloadSpeed,
   formatRemainingTime
-} from '../server/download-progress.js';
+} from '../server/services/download-progress.js';
 
 test('formats technical download speeds with familiar decimal units', () => {
   assert.equal(formatDownloadSpeed('17.03MiB/s'), '17,9 MB/s');

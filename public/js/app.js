@@ -3,9 +3,9 @@ import { getVideoResolutionDescription } from '/shared/video-resolutions.js';
 import { getInitialCarouselVideoIndex } from '/shared/carousel-selection.js';
 import { getInstagramStorySource } from '/shared/instagram-stories.js';
 import { initializeHomepage } from './homepage.js';
-import { initializeInputPlaceholder } from './input-placeholder.js';
-import { initializeInstagramAccount } from './instagram-account.js';
-import { initializeProfileSystem } from './profile-system.js';
+import { initializeInputPlaceholder } from './components/input-placeholder.js';
+import { initializeInstagramAccount } from './components/instagram-account.js';
+import { initializeProfileSystem } from './components/profile-system.js';
 
 /* ═══════════════════════════════════════════════════════════
    DOWNLINK — Frontend Logic v1.1

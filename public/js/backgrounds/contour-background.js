@@ -1,4 +1,4 @@
-import { createWaveBackground } from './homepage-background.js';
+import { createWaveBackground } from './wave-background.js';
 
 const PIXEL_BUDGET = 2_400_000;
 const TRAIL_POINT_COUNT = 7;

@@ -129,7 +129,7 @@ test('explicit cookie files are used for metadata and downloads without reading 
 });
 
 test('cookie files are rejected inside every statically served directory', t => {
-  for (const directory of ['public', 'shared', 'media', 'downloads']) {
+  for (const directory of ['public', 'shared', 'downloads']) {
     const servedDirectory = path.join(projectRoot, directory);
     fs.mkdirSync(servedDirectory, { recursive: true });
     const cookiesFile = path.join(servedDirectory, `.instagram-cookie-test-${process.pid}.txt`);

@@ -8,37 +8,38 @@ import { fileURLToPath } from 'url';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { createRequire } from 'module';
-import { PlatformRegistry } from './server/platforms/common/platform-registry.js';
-import { YouTubeProvider } from './server/platforms/youtube/youtube-provider.js';
-import { XProvider } from './server/platforms/x/x-provider.js';
-import { InstagramProvider } from './server/platforms/instagram/instagram-provider.js';
-import { getInstagramStorySource, isValidInstagramStoryVideoId } from './shared/instagram-stories.js';
+import { PlatformRegistry } from './platforms/common/platform-registry.js';
+import { YouTubeProvider } from './platforms/youtube/youtube-provider.js';
+import { XProvider } from './platforms/x/x-provider.js';
+import { InstagramProvider } from './platforms/instagram/instagram-provider.js';
+import { getInstagramStorySource, isValidInstagramStoryVideoId } from '../shared/instagram-stories.js';
 import {
   parseInstagramStoryVideos, selectInstagramStory, storyUnavailableError, getInstagramStoryError,
-} from './server/platforms/instagram/instagram-stories.js';
-import { TikTokProvider } from './server/platforms/tiktok/tiktok-provider.js';
-import { RedditProvider } from './server/platforms/reddit/reddit-provider.js';
-import { TwitchProvider } from './server/platforms/twitch/twitch-provider.js';
+} from './platforms/instagram/instagram-stories.js';
+import { TikTokProvider } from './platforms/tiktok/tiktok-provider.js';
+import { RedditProvider } from './platforms/reddit/reddit-provider.js';
+import { TwitchProvider } from './platforms/twitch/twitch-provider.js';
 import {
   parseVideoInfoCollection,
   getVideoDuration,
   getVideoFormats,
   getViewCount
-} from './server/platforms/common/video-metadata.js';
-import { formatDownloadProgress } from './server/download-progress.js';
-import { getYtDlpInfoOutput } from './server/yt-dlp-result.js';
-import { createInstagramAuth } from './server/instagram-auth.js';
-import { MP3_QUALITIES, getMp3BitrateFromQuality } from './shared/mp3-qualities.js';
+} from './platforms/common/video-metadata.js';
+import { formatDownloadProgress } from './services/download-progress.js';
+import { getYtDlpInfoOutput } from './services/yt-dlp-result.js';
+import { createInstagramAuth } from './auth/instagram-auth.js';
+import { MP3_QUALITIES, getMp3BitrateFromQuality } from '../shared/mp3-qualities.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '..');
 const require = createRequire(import.meta.url);
 const bundledFfmpegPath = require('ffmpeg-static');
 const bundledFfprobePath = require('ffprobe-static').path;
 
 // yt-dlp se guarda junto a la aplicación para que Windows no dependa de PATH.
 // Se puede sustituir con YT_DLP_PATH si ya existe una instalación administrada.
-const BIN_DIR = path.join(__dirname, 'bin');
+const BIN_DIR = path.join(PROJECT_ROOT, 'bin');
 const ytDlpFileName = process.platform === 'win32'
   ? 'yt-dlp.exe'
   : process.platform === 'darwin'
@@ -145,7 +146,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const instagramAuth = createInstagramAuth({ notifyRevoke: revokeInstagramConnection });
 
 // Carpeta temporal para descargas
-const DOWNLOADS_DIR = path.join(__dirname, 'downloads');
+const DOWNLOADS_DIR = path.join(PROJECT_ROOT, 'downloads');
 if (!fs.existsSync(DOWNLOADS_DIR)) {
   fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 }
@@ -154,9 +155,8 @@ app.use(express.json());
 app.use('/api', instagramAuth.middleware);
 app.use('/api/instagram', instagramAuth.router);
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/media', express.static(path.join(__dirname, 'media')));
-app.use('/shared', express.static(path.join(__dirname, 'shared')));
+app.use(express.static(path.join(PROJECT_ROOT, 'public')));
+app.use('/shared', express.static(path.join(PROJECT_ROOT, 'shared')));
 
 // ─── In-memory Job Store ────────────────────────────────────────────────────────
 const jobs = new Map();

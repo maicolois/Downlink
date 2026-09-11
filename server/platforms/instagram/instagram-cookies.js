@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
-const STATIC_DIRECTORIES = ['public', 'shared', 'media', 'downloads']
+const STATIC_DIRECTORIES = ['public', 'shared', 'downloads']
   .map(directory => path.resolve(PROJECT_ROOT, directory));
 
 function isInside(directory, candidate) {
