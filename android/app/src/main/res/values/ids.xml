@@ -1,0 +1,13 @@
+<resources>
+    <item name="url_input" type="id" />
+    <item name="analyze_button" type="id" />
+    <item name="download_button" type="id" />
+    <item name="quality_spinner" type="id" />
+    <item name="format_video" type="id" />
+    <item name="format_audio" type="id" />
+    <item name="home_tab" type="id" />
+    <item name="library_tab" type="id" />
+    <item name="settings_tab" type="id" />
+    <item name="status_text" type="id" />
+    <item name="link_thumbnail" type="id" />
+</resources>

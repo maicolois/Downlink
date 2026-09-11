@@ -2,6 +2,20 @@
 
 Conversor de YouTube, X, Instagram, TikTok, Reddit y Twitch a MP4 y MP3.
 
+## Aplicación Android · POCO X7 Pro
+
+La versión Android funciona directamente en el móvil, con yt-dlp, Python, QuickJS y FFmpeg incluidos. No necesita arrancar Node ni conectar el teléfono a un servidor.
+
+- Proyecto nativo: [`android/`](android/).
+- **Instalación del APK en el POCO, compilación y pruebas:** [`android/README.md`](android/README.md).
+- Compilar un APK firmado para uso personal: `./scripts/build-android.sh`.
+- APK para el teléfono: `artifacts/Downlink-1.0.2-arm64-v8a.apk` (generado, excluido de Git). Instálalo como actualización para conservar el historial.
+- Resultados de las pruebas: [`android/TEST_REPORT_1.0.2.md`](android/TEST_REPORT_1.0.2.md).
+
+Incluye compartir enlaces hacia Downlink, vista previa automática al pegar un enlace, miniaturas en el historial, MP4/MP3 con selección de calidad, cola con notificaciones y cancelación, abrir/compartir archivos y conexión opcional a Instagram. Los archivos se guardan en `Download/Downlink`.
+
+## Versión web original
+
 ```powershell
 npm install
 npm run dev

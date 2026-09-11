@@ -8,3 +8,13 @@ cookies.txt
 .env
 .env.*
 !.env.example
+
+# Android build tools, local signing material and generated APKs
+.gradle/
+**/build/
+local.properties
+*.jks
+*.keystore
+signing.properties
+artifacts/
+.idea/
