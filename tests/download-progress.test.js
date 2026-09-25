@@ -23,18 +23,27 @@ test('formats the ETA as readable Spanish time', () => {
 test('keeps progress detail concise and leaves percentage to its own indicator', () => {
   const detail = formatDownloadProgress('17.03MiB/s', '01:42');
 
-  assert.equal(detail, 'Preparando archivo · Velocidad: 17,9 MB/s · 1 min 42 s restantes');
+  assert.equal(detail, 'Descargando archivo · Velocidad: 17,9 MB/s · 1 min 42 s restantes');
   assert.doesNotMatch(detail, /%|\/s\/s|ETA|MiB/);
 });
 
 test('uses and parses one stable progress message for every yt-dlp platform', () => {
   assert.ok(YT_DLP_PROGRESS_ARGS.includes('--progress-template'));
+  assert.ok(YT_DLP_PROGRESS_ARGS.includes('--progress-delta'));
   assert.deepEqual(
     parseYtDlpProgress('downlink-progress:~42.6%| 5.2MiB/s|00:15'),
-    { progress: '43%', detail: 'Preparando archivo · Velocidad: 5,5 MB/s · 15 s restantes' }
+    {
+      progress: '43%',
+      detail: 'Descargando archivo · Velocidad: 5,5 MB/s · 15 s restantes',
+      finalizing: false
+    }
   );
   assert.deepEqual(
     parseYtDlpProgress('downlink-progress:NA|NA|Unknown'),
-    { progress: null, detail: 'Preparando archivo' }
+    { progress: null, detail: 'Descargando archivo', finalizing: false }
+  );
+  assert.deepEqual(
+    parseYtDlpProgress('downlink-progress:100.0%|17.49MiB/s|NA'),
+    { progress: '99%', detail: 'Finalizando archivo...', finalizing: true }
   );
 });

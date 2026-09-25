@@ -710,31 +710,38 @@ function parseProgress(job, line) {
   if (templatedProgress) {
     if (templatedProgress.progress) job.progress = templatedProgress.progress;
     job.progressDetail = templatedProgress.detail;
+    job.status = templatedProgress.finalizing ? 'converting' : 'downloading';
     return;
   }
 
   // [download]  45.3% of ~120.5MiB at  5.2MiB/s ETA 00:15
   const dlMatch = line.match(/\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+\S+)\s+at\s+([\d.]+\S+)\s+ETA\s+(\S+)/);
   if (dlMatch) {
-    job.progress = `${parseFloat(dlMatch[1]).toFixed(0)}%`;
+    const percent = parseFloat(dlMatch[1]);
+    const finalizing = percent >= 100;
+    job.progress = `${Math.min(99, Math.max(0, Math.round(percent)))}%`;
+    job.status = finalizing ? 'converting' : 'downloading';
     const speed = dlMatch[3];
     const eta = dlMatch[4];
-    job.progressDetail = formatDownloadProgress(speed, eta);
+    job.progressDetail = finalizing ? 'Finalizando archivo...' : formatDownloadProgress(speed, eta);
     return;
   }
 
   // Simpler progress pattern: [download]  45.3% of ~120.5MiB
   const simpleMatch = line.match(/\[download\]\s+([\d.]+)%/);
   if (simpleMatch) {
-    job.progress = `${parseFloat(simpleMatch[1]).toFixed(0)}%`;
-    job.progressDetail = 'Preparando archivo';
+    const percent = parseFloat(simpleMatch[1]);
+    const finalizing = percent >= 100;
+    job.progress = `${Math.min(99, Math.max(0, Math.round(percent)))}%`;
+    job.status = finalizing ? 'converting' : 'downloading';
+    job.progressDetail = finalizing ? 'Finalizando archivo...' : 'Descargando archivo';
     return;
   }
 
   // [download] Destination: filename
   if (line.includes('[download] Destination:')) {
     job.status = 'downloading';
-    job.progressDetail = 'Preparando archivo...';
+    job.progressDetail = 'Descargando archivo...';
     return;
   }
 
@@ -743,6 +750,18 @@ function parseProgress(job, line) {
     job.status = 'converting';
     job.progress = '99%';
     job.progressDetail = 'Uniendo vídeo y audio...';
+    return;
+  }
+
+  // yt-dlp reports download 100% before these final MP4 post-processors end.
+  if (
+    line.includes('[FixupM3u8]')
+    || line.includes('[VideoConvertor]')
+    || line.includes('[VideoRemuxer]')
+  ) {
+    job.status = 'converting';
+    job.progress = '99%';
+    job.progressDetail = 'Finalizando archivo...';
     return;
   }
 
@@ -756,8 +775,9 @@ function parseProgress(job, line) {
 
   // Already downloaded
   if (line.includes('has already been downloaded')) {
-    job.progress = '100%';
-    job.progressDetail = 'Archivo preparado';
+    job.status = 'converting';
+    job.progress = '99%';
+    job.progressDetail = 'Comprobando archivo...';
     return;
   }
 }

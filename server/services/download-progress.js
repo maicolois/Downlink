@@ -15,6 +15,8 @@ const PROGRESS_PREFIX = 'downlink-progress:';
 export const YT_DLP_PROGRESS_ARGS = Object.freeze([
   '--newline',
   '--progress',
+  '--progress-delta',
+  '0.5',
   '--no-colors',
   '--progress-template',
   `download:${PROGRESS_PREFIX}%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s`
@@ -74,7 +76,7 @@ export function formatRemainingTime(rawEta) {
 }
 
 export function formatDownloadProgress(speed, eta) {
-  const details = ['Preparando archivo'];
+  const details = ['Descargando archivo'];
   const readableSpeed = formatDownloadSpeed(speed);
   const remainingTime = formatRemainingTime(eta);
 
@@ -94,9 +96,16 @@ export function parseYtDlpProgress(line) {
     .split('|');
   const percentMatch = rawPercent.replace(',', '.').match(/[\d.]+/);
   const percent = Number.parseFloat(percentMatch?.[0] || '');
+  const finalizing = Number.isFinite(percent) && percent >= 100;
+  const displayedPercent = Number.isFinite(percent)
+    ? Math.min(99, Math.max(0, Math.round(percent)))
+    : null;
 
   return {
-    progress: Number.isFinite(percent) ? `${Math.min(100, Math.max(0, percent)).toFixed(0)}%` : null,
-    detail: formatDownloadProgress(rawSpeed.trim(), rawEta.trim())
+    progress: displayedPercent === null ? null : `${displayedPercent}%`,
+    detail: finalizing
+      ? 'Finalizando archivo...'
+      : formatDownloadProgress(rawSpeed.trim(), rawEta.trim()),
+    finalizing
   };
 }

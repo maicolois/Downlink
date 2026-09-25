@@ -112,3 +112,9 @@ test('Instagram metadata and download select a single carousel entry', () => {
 test('Reddit metadata and downloads select a single embedded video', () => {
   assert.deepEqual(new RedditProvider().getYtDlpArgs(), ['--playlist-items', '1']);
 });
+
+test('Twitch downloads HLS fragments concurrently without burdening metadata extraction', () => {
+  const provider = new TwitchProvider();
+  assert.deepEqual(provider.getYtDlpArgs(), ['--concurrent-fragments', '8']);
+  assert.deepEqual(provider.getInfoYtDlpArgs(), []);
+});
