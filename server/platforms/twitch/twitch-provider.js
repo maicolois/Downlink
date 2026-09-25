@@ -1,8 +1,7 @@
 import { PlatformProvider } from '../common/platform-provider.js';
 import { TWITCH_URL_PATTERNS } from '../../../shared/platform-patterns.js';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { pathToFileURL } from 'url';
+import { randomUUID } from 'crypto';
+import { createServer } from 'http';
 import { probeTwitchSource } from './twitch-source.js';
 import { buildTwitchUnmutedPlaylist, isTwitchMediaPlaylist } from './twitch-unmute.js';
 
@@ -19,6 +18,51 @@ function getAudioSourceUrl(formats) {
     && format.acodec !== 'none'
   ));
   return audio?.is_downlink_direct ? audio.url : null;
+}
+
+export async function serveTwitchPlaylist(playlist, token = randomUUID()) {
+  const body = Buffer.from(String(playlist), 'utf8');
+  const requestPath = `/${encodeURIComponent(token)}.m3u8`;
+  const server = createServer((request, response) => {
+    const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname;
+    if (!['GET', 'HEAD'].includes(request.method || '') || pathname !== requestPath) {
+      response.writeHead(404, { 'Cache-Control': 'no-store' });
+      response.end();
+      return;
+    }
+
+    response.writeHead(200, {
+      'Cache-Control': 'no-store',
+      'Content-Length': body.length,
+      'Content-Type': 'application/vnd.apple.mpegurl; charset=utf-8',
+    });
+    response.end(request.method === 'HEAD' ? undefined : body);
+  });
+
+  await new Promise((resolve, reject) => {
+    const onError = error => reject(error);
+    server.once('error', onError);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', onError);
+      resolve();
+    });
+  });
+  server.on('error', () => { /* A failed temporary listener falls back on cleanup. */ });
+  server.unref();
+
+  const address = server.address();
+  let closed = false;
+  return {
+    url: `http://127.0.0.1:${address.port}${requestPath}`,
+    cleanup: async () => {
+      if (closed) return;
+      closed = true;
+      await new Promise(resolve => {
+        server.close(() => resolve());
+        server.closeAllConnections?.();
+      });
+    },
+  };
 }
 
 export class TwitchProvider extends PlatformProvider {
@@ -108,12 +152,11 @@ export class TwitchProvider extends PlatformProvider {
       });
       if (!prepared.changed) return fallback;
 
-      const manifestPath = path.join(options.tempDirectory, `${options.jobId}.twitch-unmuted.m3u8`);
-      await fs.writeFile(manifestPath, prepared.playlist, 'utf8');
+      const served = await serveTwitchPlaylist(prepared.playlist, options.jobId || randomUUID());
       return {
-        url: pathToFileURL(manifestPath).href,
-        ytDlpArgs: ['--enable-file-urls'],
-        cleanup: async () => { try { await fs.unlink(manifestPath); } catch { /* Already cleaned up. */ } },
+        url: served.url,
+        ytDlpArgs: [],
+        cleanup: served.cleanup,
       };
     } catch {
       // Audio recovery is best effort. Twitch's original URL remains a valid

@@ -2,12 +2,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { TwitchProvider } from '../server/platforms/twitch/twitch-provider.js';
+import { serveTwitchPlaylist, TwitchProvider } from '../server/platforms/twitch/twitch-provider.js';
 import { deriveTwitchSourceUrl, probeTwitchSource } from '../server/platforms/twitch/twitch-source.js';
 import { getVideoFormats } from '../server/platforms/common/video-metadata.js';
 
 const advertisedUrl = 'https://video-edge.example/channel/vod/1080p60/index-muted-token.m3u8';
 const sourceUrl = 'https://video-edge.example/channel/vod/chunked/index-muted-token.m3u8';
+
+test('serves prepared Twitch playlists over loopback without filesystem path restrictions', async () => {
+  const playlist = '#EXTM3U\n#EXT-X-ENDLIST\n';
+  const served = await serveTwitchPlaylist(playlist, 'job in a folder with spaces');
+  try {
+    const url = new URL(served.url);
+    assert.equal(url.hostname, '127.0.0.1');
+    assert.equal(url.protocol, 'http:');
+    assert.equal(await (await fetch(served.url)).text(), playlist);
+    assert.equal((await fetch(new URL('/other.m3u8', served.url))).status, 404);
+  } finally {
+    await served.cleanup();
+  }
+});
 
 test('derives Twitch source playlists from the best advertised HLS rendition', () => {
   assert.equal(deriveTwitchSourceUrl([
