@@ -50,6 +50,11 @@ html {
   scroll-behavior: smooth;
 }
 
+/* The results exit animation moves below its layout box for a few frames. */
+html.is-resetting-results {
+  overflow-y: hidden;
+}
+
 body {
   font-family: var(--font-family);
   background: #08090b;
@@ -1708,6 +1713,44 @@ body.has-video .home-intro,
   flex: 0 0 auto;
   color: #fff;
   font-weight: 600;
+}
+
+.btn-cancel-download {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 99, 92, 0.28);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 69, 58, 0.09);
+  color: rgba(255, 139, 133, 0.94);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.btn-cancel-download:hover:not(:disabled) {
+  background: rgba(255, 69, 58, 0.16);
+  border-color: rgba(255, 99, 92, 0.46);
+}
+
+.btn-cancel-download:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.btn-cancel-download[hidden] {
+  display: none;
+}
+
+.btn-cancel-download svg {
+  width: 17px;
+  height: 17px;
 }
 
 /* Download Complete */

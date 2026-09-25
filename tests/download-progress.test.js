@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   formatDownloadProgress,
   formatDownloadSpeed,
-  formatRemainingTime
+  formatRemainingTime,
+  parseYtDlpProgress,
+  YT_DLP_PROGRESS_ARGS
 } from '../server/services/download-progress.js';
 
 test('formats technical download speeds with familiar decimal units', () => {
@@ -23,4 +25,16 @@ test('keeps progress detail concise and leaves percentage to its own indicator',
 
   assert.equal(detail, 'Preparando archivo · Velocidad: 17,9 MB/s · 1 min 42 s restantes');
   assert.doesNotMatch(detail, /%|\/s\/s|ETA|MiB/);
+});
+
+test('uses and parses one stable progress message for every yt-dlp platform', () => {
+  assert.ok(YT_DLP_PROGRESS_ARGS.includes('--progress-template'));
+  assert.deepEqual(
+    parseYtDlpProgress('downlink-progress:~42.6%| 5.2MiB/s|00:15'),
+    { progress: '43%', detail: 'Preparando archivo · Velocidad: 5,5 MB/s · 15 s restantes' }
+  );
+  assert.deepEqual(
+    parseYtDlpProgress('downlink-progress:NA|NA|Unknown'),
+    { progress: null, detail: 'Preparando archivo' }
+  );
 });

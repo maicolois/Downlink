@@ -45,6 +45,8 @@ const progressText = document.getElementById('progressText');
 const progressPercent = document.getElementById('progressPercent');
 const downloadComplete = document.getElementById('downloadComplete');
 const completeText = document.getElementById('completeText');
+const cancelDownloadBtn = document.getElementById('cancelDownloadBtn');
+const cancelDownloadText = document.getElementById('cancelDownloadText');
 
 // ─── State ──────────────────────────────────────────────────
 let currentVideoInfo = null;
@@ -54,7 +56,10 @@ let currentQuality = null;
 let isDownloading = false;
 let isPasting = false;
 let inputRevision = 0;
-let pollInterval = null;
+let currentDownloadJobId = null;
+let downloadCancelRequested = false;
+let cancellationPromise = null;
+let resetAfterCancellation = false;
 let analyzeTimeout = null;
 let backgroundThumbnail = null;
 let qualityGridHeightAnimation = null;
@@ -150,10 +155,20 @@ function syncBackgroundState(completedVideo = null) {
 }
 
 function resetInterface() {
+  if (isDownloading) {
+    resetAfterCancellation = true;
+    void cancelDownload();
+    return;
+  }
+
   inputRevision += 1;
   clearTimeout(analyzeTimeout);
   analyzeTimeout = null;
   clearThumbnailTransition();
+
+  // A reversed fadeInUp temporarily paints the results below the document.
+  // Keep that visual overflow from creating a short-lived page scrollbar.
+  document.documentElement.classList.remove('is-resetting-results');
 
   if (resultsExitAnimation) {
     resultsExitAnimation.cancel();
@@ -175,6 +190,7 @@ function resetInterface() {
   syncClearButtonState();
 
   const finishReset = () => {
+    document.documentElement.classList.remove('is-resetting-results');
     resultsPanel.classList.remove('visible');
     resultsPanel.style.removeProperty('overflow');
     resultsPanel.style.removeProperty('pointer-events');
@@ -213,6 +229,9 @@ function resetInterface() {
     progressText.textContent = 'Preparando archivo...';
     progressPercent.textContent = '0%';
     completeText.textContent = '¡Descarga completada!';
+    cancelDownloadBtn.hidden = false;
+    cancelDownloadBtn.disabled = false;
+    cancelDownloadText.textContent = 'Cancelar descarga';
 
     updateDownloadBtn();
     urlInput.disabled = false;
@@ -230,6 +249,7 @@ function resetInterface() {
   urlInput.disabled = true;
   syncClearButtonState();
   resultsPanel.style.pointerEvents = 'none';
+  document.documentElement.classList.add('is-resetting-results');
 
   const animation = resultsPanel.getAnimations()
     .find(candidate => candidate.animationName === 'fadeInUp');
@@ -718,9 +738,16 @@ async function downloadFile() {
   if (!selectedVideo) return;
 
   isDownloading = true;
+  currentDownloadJobId = null;
+  downloadCancelRequested = false;
+  cancellationPromise = null;
+  urlInput.disabled = true;
   syncClearButtonState();
   downloadBtn.disabled = true;
   downloadBtn.classList.add('downloading');
+  cancelDownloadBtn.hidden = false;
+  cancelDownloadBtn.disabled = false;
+  cancelDownloadText.textContent = 'Cancelar descarga';
   downloadComplete.classList.remove('visible');
   downloadProgress.classList.add('visible');
   progressBar.style.animation = 'none';
@@ -731,6 +758,7 @@ async function downloadFile() {
 
   try {
     await instagramAccount.refresh();
+    if (downloadCancelRequested) throw clientCancelledError();
     if (!currentVideoInfo) throw new Error('La cuenta de Instagram ha cambiado. Vuelve a analizar el enlace.');
     // 1. Iniciar el job en el servidor
     const startRes = await fetch('/api/download', {
@@ -753,54 +781,48 @@ async function downloadFile() {
     }
 
     const { jobId } = await startRes.json();
+    currentDownloadJobId = jobId;
     console.log(`Download job started: ${jobId}, format: ${currentFormat}, quality: ${currentQuality}`);
 
-    // 2. Polling del progreso
-    await new Promise((resolve, reject) => {
-      pollInterval = setInterval(async () => {
-        try {
-          const statusRes = await fetch(`/api/status/${jobId}`);
+    if (downloadCancelRequested) {
+      cancellationPromise ||= requestDownloadCancellation(jobId);
+      await cancellationPromise;
+      throw clientCancelledError();
+    }
 
-          if (!statusRes.ok) {
-            throw new Error('Error al consultar el estado');
-          }
+    // 2. Consultar el progreso sin solapar peticiones entre plataformas.
+    let status;
+    while (!downloadCancelRequested) {
+      await new Promise(resolve => setTimeout(resolve, 900));
+      if (downloadCancelRequested) break;
 
-          const status = await statusRes.json();
+      const statusRes = await fetch(`/api/status/${jobId}`);
+      if (!statusRes.ok) throw new Error('Error al consultar el estado');
+      status = await statusRes.json();
+      updateProgressUI(status);
 
-          // Actualizar UI de progreso
-          updateProgressUI(status);
+      if (status.status === 'ready') break;
+      if (status.status === 'cancelled') throw clientCancelledError();
+      if (status.status === 'error') throw new Error(status.error || 'Error al descargar');
+    }
 
-          if (status.status === 'ready') {
-            clearInterval(pollInterval);
-            pollInterval = null;
+    if (downloadCancelRequested) {
+      if (cancellationPromise) await cancellationPromise;
+      throw clientCancelledError();
+    }
 
-            // 3. Descargar archivo directamente (sin blob buffering)
-            progressText.textContent = 'Archivo preparado · Guardando en tu equipo...';
-            progressBar.style.width = '100%';
-            progressPercent.textContent = '100%';
-
-            // Crear enlace directo — el navegador maneja la descarga nativamente
-            const a = document.createElement('a');
-            a.href = `/api/file/${jobId}`;
-            a.download = status.filename || `download.${status.format}`;
-            a.style.display = 'none';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-
-            resolve();
-          } else if (status.status === 'error') {
-            clearInterval(pollInterval);
-            pollInterval = null;
-            reject(new Error(status.error || 'Error al descargar'));
-          }
-        } catch (err) {
-          clearInterval(pollInterval);
-          pollInterval = null;
-          reject(err);
-        }
-      }, 1500); // Polling cada 1.5 segundos
-    });
+    // 3. Descargar el archivo ya preparado sin cargarlo entero en memoria.
+    progressText.textContent = 'Archivo preparado · Guardando en tu equipo...';
+    progressBar.style.width = '100%';
+    progressPercent.textContent = '100%';
+    cancelDownloadBtn.hidden = true;
+    const a = document.createElement('a');
+    a.href = `/api/file/${jobId}`;
+    a.download = status.filename || `download.${status.format}`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
     // 4. Mostrar éxito
     downloadProgress.classList.remove('visible');
@@ -808,17 +830,66 @@ async function downloadFile() {
     completeText.textContent = `Descarga ${currentFormat.toUpperCase()} iniciada · Revisa tu navegador`;
 
   } catch (err) {
-    downloadProgress.classList.remove('visible');
-    showError(err.message);
-  } finally {
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
+    if (err.cancelled || downloadCancelRequested) {
+      downloadProgress.classList.add('visible');
+      progressBar.classList.remove('converting');
+      progressText.textContent = 'Descarga cancelada';
+      progressPercent.textContent = '—';
+      cancelDownloadBtn.hidden = true;
+    } else {
+      downloadProgress.classList.remove('visible');
+      cancelDownloadBtn.hidden = true;
+      showError(err.message);
     }
+  } finally {
+    currentDownloadJobId = null;
+    cancellationPromise = null;
     isDownloading = false;
+    urlInput.disabled = false;
     syncClearButtonState();
     downloadBtn.disabled = false;
     downloadBtn.classList.remove('downloading');
+    if (resetAfterCancellation) {
+      resetAfterCancellation = false;
+      resetInterface();
+    }
+  }
+}
+
+function clientCancelledError() {
+  return Object.assign(new Error('Descarga cancelada'), { cancelled: true });
+}
+
+async function requestDownloadCancellation(jobId) {
+  const response = await fetch(`/api/cancel/${jobId}`, {
+    method: 'POST',
+    headers: instagramAccount.requestHeaders()
+  });
+  if (!response.ok && response.status !== 404) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || 'No se pudo cancelar la descarga.');
+  }
+}
+
+async function cancelDownload() {
+  if (!isDownloading || downloadCancelRequested) return;
+
+  downloadCancelRequested = true;
+  cancelDownloadBtn.disabled = true;
+  cancelDownloadText.textContent = 'Cancelando...';
+  progressText.textContent = 'Cancelando y eliminando archivos parciales...';
+
+  if (!currentDownloadJobId) return;
+  cancellationPromise = requestDownloadCancellation(currentDownloadJobId);
+  try {
+    await cancellationPromise;
+  } catch (error) {
+    downloadCancelRequested = false;
+    cancellationPromise = null;
+    resetAfterCancellation = false;
+    cancelDownloadBtn.disabled = false;
+    cancelDownloadText.textContent = 'Cancelar descarga';
+    showError(error.message);
   }
 }
 
@@ -949,6 +1020,7 @@ formatToggle.querySelectorAll('.format-toggle__btn').forEach(btn => {
 
 // Download button
 downloadBtn.addEventListener('click', downloadFile);
+cancelDownloadBtn.addEventListener('click', cancelDownload);
 
 // Initialize with the same resting appearance as the content view.
 initializeProfileSystem();

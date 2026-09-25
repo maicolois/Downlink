@@ -25,7 +25,9 @@ import {
   getVideoFormats,
   getViewCount
 } from './platforms/common/video-metadata.js';
-import { formatDownloadProgress } from './services/download-progress.js';
+import {
+  formatDownloadProgress, parseYtDlpProgress, YT_DLP_PROGRESS_ARGS,
+} from './services/download-progress.js';
 import { getYtDlpInfoOutput } from './services/yt-dlp-result.js';
 import { createInstagramAuth } from './auth/instagram-auth.js';
 import { MP3_QUALITIES, getMp3BitrateFromQuality } from '../shared/mp3-qualities.js';
@@ -184,6 +186,7 @@ function trackProtectedProcess(context, process) {
 }
 
 function terminateConverter(child) {
+  if (!child) return Promise.resolve();
   if (child.exitCode !== null && child.exitCode !== undefined) return Promise.resolve();
   if (process.platform === 'win32' && Number.isInteger(child.pid) && child.pid > 0) {
     // Only PIDs returned by our own spawn calls are registered here. Kill ffmpeg
@@ -207,6 +210,14 @@ function removeJobFiles(job) {
       try { fs.unlinkSync(path.join(DOWNLOADS_DIR, file)); } catch { /* A closing stream may still hold the file. */ }
     }
   }
+}
+
+function cancelledJobError() {
+  return Object.assign(new Error('Descarga cancelada.'), { code: 'JOB_CANCELLED' });
+}
+
+function assertJobActive(job) {
+  if (job?.cancelled) throw cancelledJobError();
 }
 
 async function revokeInstagramConnection(context) {
@@ -244,11 +255,17 @@ function formatDuration(seconds) {
 
 // ─── Ejecutar yt-dlp como promesa (para info) ──────────────────────────────────
 async function runYtDlp(args, options = {}) {
+  assertJobActive(options.job);
   const executable = await getYtDlpExecutable();
+  assertJobActive(options.job);
 
   return new Promise((resolve, reject) => {
-    const proc = spawn(executable, args, { windowsHide: true, detached: Boolean(options.instagramContext) && process.platform !== 'win32' });
+    const proc = spawn(executable, args, {
+      windowsHide: true,
+      detached: Boolean(options.instagramContext || options.job) && process.platform !== 'win32',
+    });
     trackProtectedProcess(options.instagramContext, proc);
+    if (options.job) options.job.process = proc;
     let stdout = '';
     let stderr = '';
 
@@ -256,6 +273,11 @@ async function runYtDlp(args, options = {}) {
     proc.stderr.on('data', (data) => { stderr += data.toString(); });
 
     proc.on('close', (code) => {
+      if (options.job?.process === proc) options.job.process = null;
+      if (options.job?.cancelled) {
+        reject(cancelledJobError());
+        return;
+      }
       try {
         resolve(getYtDlpInfoOutput({ code, stdout, stderr }, options));
       } catch (error) {
@@ -264,8 +286,15 @@ async function runYtDlp(args, options = {}) {
     });
 
     proc.on('error', (err) => {
+      if (options.job?.process === proc) options.job.process = null;
+      if (options.job?.cancelled) {
+        reject(cancelledJobError());
+        return;
+      }
       reject(new Error(`No se pudo iniciar yt-dlp: ${err.message}`));
     });
+
+    if (options.job?.cancelled) void terminateConverter(proc);
   });
 }
 
@@ -299,7 +328,8 @@ function cacheInfo(cacheKey, value, ttl = INFO_CACHE_TTL_MS) {
   }
 }
 
-async function getVideoInfo(provider, url, instagramContext = null) {
+async function getVideoInfo(provider, url, instagramContext = null, job = null) {
+  assertJobActive(job);
   assertInstagramConnection(instagramContext);
   const normalizedUrl = provider.normalizeUrl(url);
   const storySource = provider.name === 'instagram' ? getInstagramStorySource(normalizedUrl) : null;
@@ -307,7 +337,7 @@ async function getVideoInfo(provider, url, instagramContext = null) {
   const cached = instagramContext ? null : readCachedInfo(cacheKey);
   if (cached) return cached;
 
-  const pending = instagramContext ? null : pendingInfoRequests.get(cacheKey);
+  const pending = instagramContext || job ? null : pendingInfoRequests.get(cacheKey);
   if (pending) return pending;
 
   const request = (async () => {
@@ -317,10 +347,11 @@ async function getVideoInfo(provider, url, instagramContext = null) {
       '--no-warnings',
       ...extractionProvider.getInfoYtDlpArgs({ url: normalizedUrl }),
       normalizedUrl
-    ], { allowPartialPlaylist: provider.name === 'instagram' && !storySource, instagramContext });
+    ], { allowPartialPlaylist: provider.name === 'instagram' && !storySource, instagramContext, job });
     const raw = instagramContext
       ? await instagramAuth.withCookieFile(instagramContext, cookiesFile => extract(new InstagramProvider({ cookiesFile })))
       : await extract(provider);
+    assertJobActive(job);
     assertInstagramConnection(instagramContext);
     const parsedVideos = storySource ? parseInstagramStoryVideos(raw) : parseVideoInfoCollection(raw);
     const extractedVideos = instagramContext ? parsedVideos : await provider.enrichVideoInfos(parsedVideos, { url: normalizedUrl });
@@ -351,11 +382,12 @@ async function getVideoInfo(provider, url, instagramContext = null) {
 
     // Active stories can expire or be added while a profile is open.
     // Authenticated metadata never enters the shared cache or request pool.
+    assertJobActive(job);
     if (!instagramContext) cacheInfo(cacheKey, value, storySource ? 30_000 : INFO_CACHE_TTL_MS);
     return value;
   })();
 
-  if (instagramContext) return request;
+  if (instagramContext || job) return request;
   pendingInfoRequests.set(cacheKey, request);
   try {
     return await request;
@@ -449,7 +481,9 @@ app.post('/api/download', async (req, res) => {
     error: null,
     createdAt: Date.now(),
     lastActivity: Date.now(),
-    process: null
+    process: null,
+    cancelled: false,
+    workerPromise: null
   };
 
   jobs.set(jobId, job);
@@ -458,12 +492,13 @@ app.post('/api/download', async (req, res) => {
   res.json({ jobId });
 
   // Iniciar descarga en background
-  startDownloadJob(job);
+  job.workerPromise = startDownloadJob(job);
 });
 
 // ─── Background download worker ────────────────────────────────────────────────
 async function startDownloadJob(job) {
   try {
+    assertJobActive(job);
     if (job.instagramContext) {
       await instagramAuth.withCookieFile(job.instagramContext, cookiesFile => performDownloadJob(job, new InstagramProvider({ cookiesFile })));
     } else {
@@ -474,12 +509,50 @@ async function startDownloadJob(job) {
   }
 }
 
+function runJobProcess(job, executable, args, label) {
+  assertJobActive(job);
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn(executable, args, {
+      windowsHide: true,
+      detached: process.platform !== 'win32',
+    });
+    trackProtectedProcess(job.instagramContext, proc);
+    job.process = proc;
+    let stderr = '';
+
+    proc.stdout?.on('data', data => {
+      for (const line of data.toString().split('\n')) parseProgress(job, line);
+    });
+    proc.stderr?.on('data', data => {
+      stderr += data.toString();
+      for (const line of data.toString().split('\n')) parseProgress(job, line);
+    });
+
+    proc.once('close', code => {
+      if (job.process === proc) job.process = null;
+      if (job.cancelled) reject(cancelledJobError());
+      else if (code === 0) resolve();
+      else reject(new Error(stderr.trim() || `${label} exited with code ${code}`));
+    });
+    proc.once('error', err => {
+      if (job.process === proc) job.process = null;
+      if (job.cancelled) reject(cancelledJobError());
+      else reject(new Error(`No se pudo iniciar ${label}: ${err.message}`));
+    });
+
+    if (job.cancelled) void terminateConverter(proc);
+  });
+}
+
 async function performDownloadJob(job, provider) {
   try {
+    assertJobActive(job);
     // 1. Obtener título
     console.log(`[Job ${job.id.slice(0, 8)}] Starting: format=${job.format}, quality=${job.quality}`);
     assertInstagramConnection(job.instagramContext);
-    const info = await getVideoInfo(provider, job.url, job.instagramContext);
+    const info = await getVideoInfo(provider, job.url, job.instagramContext, job);
+    assertJobActive(job);
     const selectedVideoIndex = Array.isArray(info.videos)
       ? info.videos.findIndex(video => video.playlistItem === job.playlistItem)
       : -1;
@@ -503,6 +576,7 @@ async function performDownloadJob(job, provider) {
     // 2. Construir argumentos de yt-dlp
     const ffmpegLocation = getFfmpegLocation();
     const executable = await getYtDlpExecutable();
+    assertJobActive(job);
 
     let ytArgs;
     let tempAudioPath = null;
@@ -515,7 +589,7 @@ async function performDownloadJob(job, provider) {
         '-f', 'bestaudio/best',
         '--no-playlist',
         '--no-warnings',
-        '--newline',
+        ...YT_DLP_PROGRESS_ARGS,
         '--ffmpeg-location', ffmpegLocation,
         '-o', tempAudioPath,
         ...providerArgs,
@@ -526,41 +600,8 @@ async function performDownloadJob(job, provider) {
 
       console.log(`[Job ${job.id.slice(0, 8)}] Preparing MP3 (bitrate ${bitrate}k)`);
 
-      await new Promise((resolve, reject) => {
-        const proc = spawn(executable, ytArgs, { windowsHide: true, detached: Boolean(job.instagramContext) && process.platform !== 'win32' });
-        trackProtectedProcess(job.instagramContext, proc);
-        job.process = proc;
-        let stderr = '';
-
-        proc.stdout.on('data', (data) => {
-          const lines = data.toString().split('\n');
-          for (const line of lines) {
-            parseProgress(job, line);
-          }
-        });
-
-        proc.stderr.on('data', (data) => {
-          stderr += data.toString();
-          const lines = data.toString().split('\n');
-          for (const line of lines) {
-            parseProgress(job, line);
-          }
-        });
-
-        proc.on('close', (code) => {
-          job.process = null;
-          if (code === 0) {
-            resolve();
-          } else {
-            reject(new Error(stderr.trim() || `yt-dlp exited with code ${code}`));
-          }
-        });
-
-        proc.on('error', (err) => {
-          job.process = null;
-          reject(new Error(`No se pudo iniciar yt-dlp: ${err.message}`));
-        });
-      });
+      await runJobProcess(job, executable, ytArgs, 'yt-dlp');
+      assertJobActive(job);
 
       const tempFiles = fs.readdirSync(DOWNLOADS_DIR).filter(f => f.startsWith(`${job.id}.audio.`));
       const downloadedAudio = tempFiles.find(f => ['.m4a', '.webm', '.mp4', '.aac', '.opus', '.mp3', '.wav', '.flac', '.ogg'].includes(path.extname(f).toLowerCase()));
@@ -572,11 +613,11 @@ async function performDownloadJob(job, provider) {
 
       const audioInputPath = path.join(DOWNLOADS_DIR, downloadedAudio);
       const ffmpegExecutable = path.join(BIN_DIR, path.basename(bundledFfmpegPath));
+      assertJobActive(job);
 
       console.log(`[Job ${job.id.slice(0, 8)}] Converting to MP3 with FFmpeg: ${ffmpegExecutable} -i ${audioInputPath} -c:a libmp3lame -b:a ${bitrate}k ${finalFilePath}`);
 
-      await new Promise((resolve, reject) => {
-        const ffmpeg = spawn(ffmpegExecutable, [
+      await runJobProcess(job, ffmpegExecutable, [
           '-hide_banner',
           '-loglevel', 'error',
           '-i', audioInputPath,
@@ -586,34 +627,8 @@ async function performDownloadJob(job, provider) {
           '-ar', '44100',
           '-ac', '2',
           finalFilePath
-        ], { windowsHide: true, detached: Boolean(job.instagramContext) && process.platform !== 'win32' });
-
-        job.process = ffmpeg;
-        trackProtectedProcess(job.instagramContext, ffmpeg);
-        let stderr = '';
-
-        ffmpeg.stderr.on('data', (data) => {
-          stderr += data.toString();
-          const lines = data.toString().split('\n');
-          for (const line of lines) {
-            parseProgress(job, line);
-          }
-        });
-
-        ffmpeg.on('close', (code) => {
-          job.process = null;
-          if (code === 0) {
-            resolve();
-          } else {
-            reject(new Error(stderr.trim() || `ffmpeg exited with code ${code}`));
-          }
-        });
-
-        ffmpeg.on('error', (err) => {
-          job.process = null;
-          reject(new Error(`No se pudo iniciar ffmpeg: ${err.message}`));
-        });
-      });
+        ], 'ffmpeg');
+      assertJobActive(job);
 
       try { fs.unlinkSync(audioInputPath); } catch (e) { /* ignore */ }
       job.filePath = finalFilePath;
@@ -627,7 +642,7 @@ async function performDownloadJob(job, provider) {
         '--recode-video', 'mp4',
         '--no-playlist',
         '--no-warnings',
-        '--newline',
+        ...YT_DLP_PROGRESS_ARGS,
         '--ffmpeg-location', ffmpegLocation,
         '-o', finalFilePath,
         ...providerArgs,
@@ -636,41 +651,8 @@ async function performDownloadJob(job, provider) {
 
       console.log(`[Job ${job.id.slice(0, 8)}] Preparing MP4`);
 
-      await new Promise((resolve, reject) => {
-        const proc = spawn(executable, ytArgs, { windowsHide: true, detached: Boolean(job.instagramContext) && process.platform !== 'win32' });
-        trackProtectedProcess(job.instagramContext, proc);
-        job.process = proc;
-        let stderr = '';
-
-        proc.stdout.on('data', (data) => {
-          const lines = data.toString().split('\n');
-          for (const line of lines) {
-            parseProgress(job, line);
-          }
-        });
-
-        proc.stderr.on('data', (data) => {
-          stderr += data.toString();
-          const lines = data.toString().split('\n');
-          for (const line of lines) {
-            parseProgress(job, line);
-          }
-        });
-
-        proc.on('close', (code) => {
-          job.process = null;
-          if (code === 0) {
-            resolve();
-          } else {
-            reject(new Error(stderr.trim() || `yt-dlp exited with code ${code}`));
-          }
-        });
-
-        proc.on('error', (err) => {
-          job.process = null;
-          reject(new Error(`No se pudo iniciar yt-dlp: ${err.message}`));
-        });
-      });
+      await runJobProcess(job, executable, ytArgs, 'yt-dlp');
+      assertJobActive(job);
 
       job.filePath = path.join(DOWNLOADS_DIR, `${job.id}.mp4`);
       if (!fs.existsSync(job.filePath)) {
@@ -681,6 +663,7 @@ async function performDownloadJob(job, provider) {
       job.filename = `${safeTitle}.mp4`;
     }
     
+    assertJobActive(job);
     assertInstagramConnection(job.instagramContext);
     const stat = fs.statSync(job.filePath);
     const sizeMB = (stat.size / (1024 * 1024)).toFixed(1);
@@ -696,6 +679,16 @@ async function performDownloadJob(job, provider) {
 }
 
 function failDownloadJob(job, err) {
+  if (job.cancelled || err.code === 'JOB_CANCELLED') {
+    job.cancelled = true;
+    job.status = 'cancelled';
+    job.error = null;
+    job.progressDetail = 'Descarga cancelada';
+    job.process = null;
+    try { removeJobFiles(job); } catch { /* ignore */ }
+    return;
+  }
+
   console.error(`[Job ${job.id.slice(0, 8)}] Error:`, job.instagramContext ? (err.code || 'Instagram download failed') : err.message);
   job.status = 'error';
   job.error = err.code === 'INSTAGRAM_SESSION_EXPIRED' ? err.message : (job.isInstagramStory || job.instagramContext)
@@ -710,7 +703,15 @@ function failDownloadJob(job, err) {
 // ─── Parsear progreso de yt-dlp ─────────────────────────────────────────────────
 function parseProgress(job, line) {
   if (!line || !line.trim()) return;
+  if (job.cancelled) return;
   job.lastActivity = Date.now();
+
+  const templatedProgress = parseYtDlpProgress(line);
+  if (templatedProgress) {
+    if (templatedProgress.progress) job.progress = templatedProgress.progress;
+    job.progressDetail = templatedProgress.detail;
+    return;
+  }
 
   // [download]  45.3% of ~120.5MiB at  5.2MiB/s ETA 00:15
   const dlMatch = line.match(/\[download\]\s+([\d.]+)%\s+of\s+~?([\d.]+\S+)\s+at\s+([\d.]+\S+)\s+ETA\s+(\S+)/);
@@ -780,6 +781,38 @@ app.get('/api/status/:jobId', (req, res) => {
   });
 });
 
+app.post('/api/cancel/:jobId', async (req, res) => {
+  const job = jobs.get(req.params.jobId);
+
+  if (!job || !canReadJob(req, job)) {
+    return res.status(404).json({ error: 'Job no encontrado' });
+  }
+  if (job.status === 'cancelled') {
+    return res.json({ status: 'cancelled' });
+  }
+  if (job.status === 'error') {
+    return res.status(409).json({ error: job.error || 'La descarga ya terminó con un error.' });
+  }
+
+  job.cancelled = true;
+  job.status = 'cancelled';
+  job.error = null;
+  job.progressDetail = 'Cancelando y eliminando archivos parciales...';
+  job.lastActivity = Date.now();
+  for (const stream of job.streams || []) stream.destroy();
+
+  await terminateConverter(job.process);
+  if (job.workerPromise) {
+    await Promise.race([
+      job.workerPromise,
+      new Promise(resolve => setTimeout(resolve, 4_000)),
+    ]);
+  }
+  removeJobFiles(job);
+  job.progressDetail = 'Descarga cancelada';
+  return res.json({ status: 'cancelled' });
+});
+
 // ─── GET /api/file/:jobId — Descargar el archivo completado ─────────────────────
 app.get('/api/file/:jobId', (req, res) => {
   const job = jobs.get(req.params.jobId);
@@ -821,7 +854,7 @@ app.get('/api/file/:jobId', (req, res) => {
     job.streams.add(stream);
     stream.once('close', () => {
       job.streams.delete(stream);
-      if (job.revoked) {
+      if (job.revoked || job.cancelled) {
         res.destroy();
         removeJobFiles(job);
       }
@@ -862,9 +895,9 @@ setInterval(() => {
   // Limpiar jobs viejos (>4 horas)
   for (const [id, job] of jobs) {
     if (now - job.lastActivity > 240 * 60 * 1000) {
-      if (job.filePath && fs.existsSync(job.filePath)) {
-        try { fs.unlinkSync(job.filePath); } catch (e) { /* ignore */ }
-      }
+      job.cancelled = true;
+      if (job.process) void terminateConverter(job.process);
+      try { removeJobFiles(job); } catch { /* ignore */ }
       jobs.delete(id);
       console.log(`[Cleanup] Deleted old job: ${id.slice(0, 8)}`);
     }
@@ -903,6 +936,10 @@ app.listen(PORT, () => {
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.once(signal, () => {
+    for (const job of jobs.values()) {
+      job.cancelled = true;
+      if (job.process) void terminateConverter(job.process);
+    }
     void instagramAuth.dispose().finally(() => process.exit(0));
   });
 }

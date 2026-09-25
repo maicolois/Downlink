@@ -10,6 +10,16 @@ const BYTES_PER_UNIT = Object.freeze({
   TIB: 1_099_511_627_776
 });
 
+const PROGRESS_PREFIX = 'downlink-progress:';
+
+export const YT_DLP_PROGRESS_ARGS = Object.freeze([
+  '--newline',
+  '--progress',
+  '--no-colors',
+  '--progress-template',
+  `download:${PROGRESS_PREFIX}%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s`
+]);
+
 function formatDecimal(value) {
   return value
     .toFixed(1)
@@ -71,4 +81,22 @@ export function formatDownloadProgress(speed, eta) {
   if (readableSpeed) details.push(`Velocidad: ${readableSpeed}`);
   if (remainingTime) details.push(`${remainingTime} restantes`);
   return details.join(' · ');
+}
+
+export function parseYtDlpProgress(line) {
+  const text = String(line || '');
+  const marker = text.indexOf(PROGRESS_PREFIX);
+  if (marker < 0) return null;
+
+  const [rawPercent = '', rawSpeed = '', rawEta = ''] = text
+    .slice(marker + PROGRESS_PREFIX.length)
+    .trim()
+    .split('|');
+  const percentMatch = rawPercent.replace(',', '.').match(/[\d.]+/);
+  const percent = Number.parseFloat(percentMatch?.[0] || '');
+
+  return {
+    progress: Number.isFinite(percent) ? `${Math.min(100, Math.max(0, percent)).toFixed(0)}%` : null,
+    detail: formatDownloadProgress(rawSpeed.trim(), rawEta.trim())
+  };
 }
