@@ -109,3 +109,30 @@ export function parseYtDlpProgress(line) {
     finalizing
   };
 }
+
+export function parseFfmpegOutTime(line) {
+  const match = String(line || '').trim().match(/^out_time=(\d+):(\d{2}):(\d{2}(?:\.\d+)?)$/);
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3]);
+  if (
+    !Number.isFinite(hours)
+    || !Number.isFinite(minutes)
+    || !Number.isFinite(seconds)
+    || minutes >= 60
+    || seconds >= 60
+  ) {
+    return null;
+  }
+  return (hours * 3600) + (minutes * 60) + seconds;
+}
+
+export function isDownloadDurationComplete(actualDuration, expectedDuration, toleranceSeconds = 30) {
+  const actual = Number(actualDuration);
+  const expected = Number(expectedDuration);
+  const tolerance = Number(toleranceSeconds);
+  if (!Number.isFinite(actual) || actual <= 0 || !Number.isFinite(expected) || expected <= 0) return false;
+  return actual + Math.max(0, Number.isFinite(tolerance) ? tolerance : 0) >= expected;
+}

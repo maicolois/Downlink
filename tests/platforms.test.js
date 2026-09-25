@@ -113,8 +113,11 @@ test('Reddit metadata and downloads select a single embedded video', () => {
   assert.deepEqual(new RedditProvider().getYtDlpArgs(), ['--playlist-items', '1']);
 });
 
-test('Twitch downloads HLS fragments concurrently without burdening metadata extraction', () => {
+test('Twitch uses FFmpeg for player-compatible HLS downloads without burdening metadata extraction', () => {
   const provider = new TwitchProvider();
-  assert.deepEqual(provider.getYtDlpArgs(), ['--concurrent-fragments', '8']);
+  assert.deepEqual(provider.getYtDlpArgs(), [
+    '--downloader', 'm3u8:ffmpeg',
+    '--downloader-args', 'ffmpeg:-progress pipe:2 -nostats',
+  ]);
   assert.deepEqual(provider.getInfoYtDlpArgs(), []);
 });

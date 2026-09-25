@@ -26,6 +26,14 @@ export class PlatformProvider {
     return this.getYtDlpArgs();
   }
 
+  getDownloadUrl({ url } = {}) {
+    return url;
+  }
+
+  async prepareDownload(options = {}) {
+    return { url: this.getDownloadUrl(options), ytDlpArgs: [], cleanup: null };
+  }
+
   async enrichVideoInfos(infos) {
     return infos;
   }

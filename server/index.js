@@ -26,7 +26,11 @@ import {
   getViewCount
 } from './platforms/common/video-metadata.js';
 import {
-  formatDownloadProgress, parseYtDlpProgress, YT_DLP_PROGRESS_ARGS,
+  formatDownloadProgress,
+  isDownloadDurationComplete,
+  parseFfmpegOutTime,
+  parseYtDlpProgress,
+  YT_DLP_PROGRESS_ARGS,
 } from './services/download-progress.js';
 import { getYtDlpInfoOutput } from './services/yt-dlp-result.js';
 import { createInstagramAuth } from './auth/instagram-auth.js';
@@ -96,6 +100,38 @@ async function getYtDlpExecutable() {
   }
 
   return ytDlpDownloadPromise;
+}
+
+async function probeMediaDuration(filePath) {
+  getFfmpegLocation();
+  return new Promise((resolve, reject) => {
+    const proc = spawn(LOCAL_FFPROBE_PATH, [
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      filePath,
+    ], { windowsHide: true });
+    let stdout = '';
+    let stderr = '';
+    const timeout = setTimeout(() => {
+      void terminateConverter(proc);
+      reject(new Error('FFprobe tardó demasiado en verificar la duración.'));
+    }, 30_000);
+    timeout.unref?.();
+
+    proc.stdout?.on('data', chunk => { stdout += chunk.toString(); });
+    proc.stderr?.on('data', chunk => { stderr += chunk.toString(); });
+    proc.once('error', error => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    proc.once('close', code => {
+      clearTimeout(timeout);
+      const duration = Number.parseFloat(stdout.trim());
+      if (code === 0 && Number.isFinite(duration)) resolve(duration);
+      else reject(new Error(stderr.trim() || 'No se pudo verificar la duración del archivo.'));
+    });
+  });
 }
 
 async function warmYtDlp() {
@@ -204,11 +240,18 @@ function terminateConverter(child) {
   return Promise.resolve();
 }
 
-function removeJobFiles(job) {
+function removeJobFiles(job, retries = 4) {
+  let shouldRetry = false;
   for (const file of fs.readdirSync(DOWNLOADS_DIR)) {
     if (file.startsWith(`${job.id}.`)) {
-      try { fs.unlinkSync(path.join(DOWNLOADS_DIR, file)); } catch { /* A closing stream may still hold the file. */ }
+      try { fs.unlinkSync(path.join(DOWNLOADS_DIR, file)); } catch { shouldRetry = true; }
     }
+  }
+  if (shouldRetry && retries > 0) {
+    const retry = setTimeout(() => {
+      try { removeJobFiles(job, retries - 1); } catch { /* Best-effort cleanup. */ }
+    }, 250);
+    retry.unref?.();
   }
 }
 
@@ -367,7 +410,8 @@ async function getVideoInfo(provider, url, instagramContext = null, job = null) 
         duration_string: duration !== null ? formatDuration(duration) : (info.duration_string || ''),
         channel: info.channel || info.uploader || 'Desconocido',
         view_count: getViewCount(info),
-        videoFormats: getVideoFormats(info)
+        videoFormats: getVideoFormats(info),
+        ...(info.downlink_audio_url ? { audioSourceUrl: info.downlink_audio_url } : {})
       };
     });
     const firstVideo = videos[0];
@@ -546,6 +590,7 @@ function runJobProcess(job, executable, args, label) {
 }
 
 async function performDownloadJob(job, provider) {
+  let preparedDownload = null;
   try {
     assertJobActive(job);
     // 1. Obtener título
@@ -559,9 +604,27 @@ async function performDownloadJob(job, provider) {
     const selectedVideo = job.isInstagramStory
       ? selectInstagramStory(info, job.videoId)
       : (selectedVideoIndex >= 0 ? info.videos[selectedVideoIndex] : info);
+    job.duration = Number(selectedVideo.duration) || Number(info.duration) || null;
     const providerArgs = provider.getYtDlpArgs({
-      url: job.url, videoId: job.videoId, playlistItem: job.playlistItem ?? 1,
+      url: job.url,
+      format: job.format,
+      quality: job.quality,
+      video: selectedVideo,
+      videoId: job.videoId,
+      playlistItem: job.playlistItem ?? 1,
     });
+    if (provider.name === 'twitch') job.progressDetail = 'Buscando audio original disponible de Twitch...';
+    preparedDownload = await provider.prepareDownload({
+      url: job.url,
+      format: job.format,
+      quality: job.quality,
+      video: selectedVideo,
+      tempDirectory: DOWNLOADS_DIR,
+      jobId: job.id,
+    });
+    assertJobActive(job);
+    const downloadUrl = preparedDownload.url;
+    providerArgs.push(...(preparedDownload.ytDlpArgs || []));
     const carouselSuffix = job.isInstagramStory
       ? ` - ${job.videoId}`
       : (selectedVideoIndex >= 0 ? ` - Vídeo ${selectedVideoIndex + 1}` : '');
@@ -593,7 +656,7 @@ async function performDownloadJob(job, provider) {
         '--ffmpeg-location', ffmpegLocation,
         '-o', tempAudioPath,
         ...providerArgs,
-        job.url
+        downloadUrl
       ];
 
       finalFilePath = path.join(DOWNLOADS_DIR, `${job.id}.mp3`);
@@ -646,7 +709,7 @@ async function performDownloadJob(job, provider) {
         '--ffmpeg-location', ffmpegLocation,
         '-o', finalFilePath,
         ...providerArgs,
-        job.url
+        downloadUrl
       ];
 
       console.log(`[Job ${job.id.slice(0, 8)}] Preparing MP4`);
@@ -665,6 +728,18 @@ async function performDownloadJob(job, provider) {
     
     assertJobActive(job);
     assertInstagramConnection(job.instagramContext);
+    if (provider.name === 'twitch' && Number.isFinite(job.duration) && job.duration > 0) {
+      job.status = 'converting';
+      job.progress = '99%';
+      job.progressDetail = 'Verificando que el VOD esté completo...';
+      const actualDuration = await probeMediaDuration(job.filePath);
+      assertJobActive(job);
+      if (!isDownloadDurationComplete(actualDuration, job.duration)) {
+        throw new Error(
+          `La descarga de Twitch quedó incompleta (${Math.round(actualDuration)} de ${Math.round(job.duration)} segundos).`,
+        );
+      }
+    }
     const stat = fs.statSync(job.filePath);
     const sizeMB = (stat.size / (1024 * 1024)).toFixed(1);
 
@@ -675,6 +750,8 @@ async function performDownloadJob(job, provider) {
 
   } catch (err) {
     failDownloadJob(job, err);
+  } finally {
+    try { await preparedDownload?.cleanup?.(); } catch { /* Temporary manifests are best-effort cleanup. */ }
   }
 }
 
@@ -711,6 +788,15 @@ function parseProgress(job, line) {
     if (templatedProgress.progress) job.progress = templatedProgress.progress;
     job.progressDetail = templatedProgress.detail;
     job.status = templatedProgress.finalizing ? 'converting' : 'downloading';
+    return;
+  }
+
+  const ffmpegOutTime = parseFfmpegOutTime(line);
+  if (ffmpegOutTime !== null && Number.isFinite(job.duration) && job.duration > 0) {
+    const percent = (ffmpegOutTime / job.duration) * 100;
+    job.progress = `${Math.min(99, Math.max(0, Math.round(percent)))}%`;
+    job.progressDetail = 'Descargando archivo';
+    job.status = 'downloading';
     return;
   }
 

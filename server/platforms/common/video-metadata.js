@@ -133,6 +133,12 @@ export function getVideoFormats(info) {
       height,
       label: getVideoResolutionLabel(displayResolution),
       filesize_approx: format.filesize_approx || format.filesize || null,
+      ...((format.is_downlink_source || format.is_downlink_direct) && format.url
+        ? {
+            sourceUrl: format.url,
+            ...(format.vcodec ? { vcodec: format.vcodec } : {}),
+          }
+        : {}),
     });
   }
   return formats.size
