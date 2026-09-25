@@ -6,6 +6,7 @@ import { initializeHomepage } from './homepage.js';
 import { initializeInputPlaceholder } from './components/input-placeholder.js';
 import { initializeInstagramAccount } from './components/instagram-account.js';
 import { initializeProfileSystem } from './components/profile-system.js';
+import { fetchWithRetry } from './fetch-with-retry.js';
 
 /* ═══════════════════════════════════════════════════════════
    DOWNLINK — Frontend Logic v1.1
@@ -56,6 +57,7 @@ let currentQuality = null;
 let isDownloading = false;
 let isPasting = false;
 let inputRevision = 0;
+let hasUsedInitialAccountState = false;
 let currentDownloadJobId = null;
 let downloadCancelRequested = false;
 let cancellationPromise = null;
@@ -694,9 +696,15 @@ async function analyzeVideo() {
   downloadProgress.classList.remove('visible');
 
   try {
-    await instagramAccount.ready;
-    await instagramAccount.refresh();
-    const response = await fetch('/api/info', {
+    if (!hasUsedInitialAccountState) {
+      // The account component starts this request while the page is loading.
+      // Reuse it instead of issuing a second session request on the first link.
+      hasUsedInitialAccountState = true;
+      await instagramAccount.ready;
+    } else {
+      await instagramAccount.refresh();
+    }
+    const response = await fetchWithRetry('/api/info', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...instagramAccount.requestHeaders() },
       body: JSON.stringify({ url })
@@ -725,7 +733,9 @@ async function analyzeVideo() {
     resultsPanel.classList.add('visible');
 
   } catch (err) {
-    showError(err.message);
+    showError(err instanceof TypeError
+      ? 'No se pudo contactar con la aplicación. Vuelve a intentarlo.'
+      : err.message);
   } finally {
     setAnalyzing(false);
   }
