@@ -1,12 +1,12 @@
 // Bump this version whenever the app shell changes. Updates activate after the
 // existing windows close, so an in-progress download is never forcibly reloaded.
-const CACHE = 'downlink-shell-v1';
+const CACHE = 'downlink-shell-v2';
 const SHELL = [
   '/', '/index.html', '/manifest.webmanifest',
-  '/css/main.css', '/css/profile.css', '/css/pwa.css',
+  '/css/main.css', '/css/options-menu.css', '/css/pwa.css',
   '/js/app.js', '/js/platform.js', '/js/pwa.js', '/js/download-session.js',
   '/js/homepage.js', '/js/fetch-with-retry.js',
-  '/js/components/profile-system.js', '/js/components/instagram-account.js',
+  '/js/components/options-menu.js', '/js/components/instagram-account.js',
   '/js/components/input-placeholder.js',
   '/js/backgrounds/contour-background.js', '/js/backgrounds/wave-background.js',
   '/shared/platform-patterns.js', '/shared/video-resolutions.js',
@@ -14,8 +14,6 @@ const SHELL = [
   '/assets/icons/favicon.svg', '/assets/icons/apple-touch-icon.png',
   '/assets/icons/app-192.png', '/assets/icons/app-512.png', '/assets/icons/app-maskable-512.png',
   '/assets/graphics/contours.svg',
-  ...['ember-fox', 'ocean-otter', 'violet-robot', 'forest-frog', 'sunset-cat']
-    .map(name => `/assets/avatars/${name}.webp`),
 ];
 
 self.addEventListener('install', event => {

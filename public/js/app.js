@@ -5,7 +5,7 @@ import { getInstagramStorySource } from '/shared/instagram-stories.js';
 import { initializeHomepage } from './homepage.js';
 import { initializeInputPlaceholder } from './components/input-placeholder.js';
 import { initializeInstagramAccount } from './components/instagram-account.js';
-import { initializeProfileSystem } from './components/profile-system.js';
+import { initializeOptionsMenu } from './components/options-menu.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { apiFetch, isNativeApp, isIOSWebApp, readClipboard, saveDownload } from './platform.js';
 import { initializePwa } from './pwa.js';
@@ -1136,7 +1136,7 @@ downloadBtn.addEventListener('click', () => { void downloadFile(); });
 cancelDownloadBtn.addEventListener('click', cancelDownload);
 
 // Initialize with the same resting appearance as the content view.
-initializeProfileSystem();
+initializeOptionsMenu();
 initializePwa();
 initializeHomepage();
 syncBackgroundState();

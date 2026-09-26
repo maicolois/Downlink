@@ -25,7 +25,7 @@ let lastJob;
 app.get('/api/instagram/session', (_req, res) => res.json({ available: false, connected: false, pending: false }));
 app.post('/api/info', (req, res) => res.json({
   url: req.body.url, platform: 'youtube', title: 'Vídeo de prueba · Downlink', channel: 'Prueba local',
-  thumbnail: `${base}/assets/avatars/ember-fox.webp`, duration: 60, view_count: 1234,
+  thumbnail: `${base}/assets/icons/favicon.svg`, duration: 60, view_count: 1234,
   videoFormats: [{ height: 720, label: '720p' }, { height: 480, label: '480p' }], audioQualities: MP3_QUALITIES,
 }));
 app.post('/api/download', (req, res) => {
@@ -65,14 +65,6 @@ const waitUntil = async condition => {
 };
 
 async function prepare(context) {
-  await context.addInitScript(() => {
-    if (!localStorage.getItem('downlink.profiles.v1')) {
-      localStorage.setItem('downlink.profiles.v1', JSON.stringify([
-        { id: 'test', name: 'Maico', avatar: { type: 'preset', value: 'ember' } },
-      ]));
-      localStorage.setItem('downlink.activeProfileId.v1', 'test');
-    }
-  });
   const page = await context.newPage();
   const errors = [];
   const diagnostics = { networkOutage: false };
@@ -87,6 +79,40 @@ async function prepare(context) {
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
   return { page, errors, diagnostics };
+}
+
+async function menuChecks(page, name) {
+  const trigger = page.locator('#optionsMenuButton');
+  const menu = page.locator('#optionsMenu');
+  const instagram = page.locator('#instagramAccountButton');
+  assert.equal(await page.locator('#profileGate, #profileControl, #pwaInstallButton').count(), 0);
+  assert.equal(await page.locator('#urlInput').isEnabled(), true, 'Fresh visitors enter directly');
+  assert.equal(await trigger.locator('circle').count(), 2);
+  await trigger.click();
+  assert.equal(await trigger.getAttribute('aria-expanded'), 'true');
+  assert.equal(await menu.isVisible(), true);
+  assert.equal(await menu.locator('[role="menuitem"]').count(), 1);
+  assert.match(await instagram.innerText(), /Conectar Instagram/);
+  await page.screenshot({ path: path.join(output, `${name}-menu.png`), fullPage: true, animations: 'disabled' });
+  await page.keyboard.press('Escape');
+  assert.equal(await menu.isVisible(), false);
+  assert.equal(await trigger.evaluate(e => e === document.activeElement), true);
+  await page.keyboard.press('ArrowDown');
+  assert.equal(await instagram.evaluate(e => e === document.activeElement), true);
+  await page.keyboard.press('Enter');
+  assert.equal(await page.locator('#instagramAccountDialog').evaluate(e => e.open), true);
+  assert.equal(await menu.isVisible(), false);
+  await page.locator('#instagramAccountClose').click();
+  await page.waitForFunction(() => document.activeElement.id === 'optionsMenuButton');
+  await trigger.click();
+  await page.locator('#urlInput').click();
+  assert.equal(await menu.isVisible(), false, 'Outside clicks dismiss the menu');
+  await trigger.focus();
+  await page.keyboard.press('ArrowUp');
+  assert.equal(await instagram.evaluate(e => e === document.activeElement), true);
+  await page.keyboard.press('Tab');
+  assert.equal(await menu.isVisible(), false);
+  assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
 }
 
 async function mobileChecks(browser, name) {
@@ -106,11 +132,7 @@ async function mobileChecks(browser, name) {
     await page.screenshot({ path: path.join(output, `${name}-${width}.png`), fullPage: true, animations: 'disabled' });
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator('#profileMenuButton').click();
-  await page.locator('#pwaInstallButton').click();
-  assert.equal(await page.locator('#pwaInstallDialog').evaluate(e => e.open), true);
-  await page.screenshot({ path: path.join(output, `${name}-install.png`), fullPage: true, animations: 'disabled' });
-  await page.locator('#pwaInstallClose').click();
+  await menuChecks(page, name);
 
   await analyze('https://www.youtube.com/watch?v=abcdefghijk');
   await page.screenshot({ path: path.join(output, `${name}-results.png`), fullPage: true, animations: 'disabled' });
@@ -185,7 +207,7 @@ async function mobileChecks(browser, name) {
   assert.equal(await page.evaluate(() => localStorage.getItem('downlink.download.v1')), null);
   assert.deepEqual(errors, [], `${name}: page errors`);
   await context.close();
-  console.log(`${name}: layouts, install guide, MP4/MP3, reload, offline recovery, save, expiry, cancellation and cache isolation passed`);
+  console.log(`${name}: layouts, options menu, Instagram dialog, MP4/MP3, reload, offline recovery, save, expiry, cancellation and cache isolation passed`);
 }
 
 let chrome;
@@ -205,7 +227,16 @@ try {
   if (process.argv.includes('--compare-baseline')) {
     assert.deepEqual(metrics, JSON.parse(await fs.readFile(path.join(output, 'desktop-before.json'), 'utf8')));
   }
-  assert.equal(await page.locator('#pwaInstallButton').isVisible(), false);
+  await menuChecks(page, 'desktop');
+  // Upgrades discard the retired local identity, without blocking startup.
+  await page.evaluate(() => {
+    localStorage.setItem('downlink.profiles.v1', JSON.stringify([{ id: 'old', name: 'Old profile' }]));
+    localStorage.setItem('downlink.activeProfileId.v1', 'old');
+  });
+  await page.reload();
+  await page.waitForFunction(() => localStorage.getItem('downlink.profiles.v1') === null);
+  assert.equal(await page.evaluate(() => localStorage.getItem('downlink.activeProfileId.v1')), null);
+  assert.equal(await page.locator('#urlInput').isEnabled(), true);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: path.join(output, 'desktop-after.png'), fullPage: true, animations: 'disabled' });
   await desktop.close();

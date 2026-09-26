@@ -20,7 +20,6 @@ export function createDownloadSession(getStorage = () => globalThis.localStorage
     const video = value.video;
     return {
       jobId: value.jobId, format: value.format, quality, createdAt: value.createdAt,
-      profileId: text(value.profileId),
       video: {
         url: httpUrl(video.url), title: text(video.title), channel: text(video.channel),
         platform: text(video.platform), thumbnail: httpUrl(video.thumbnail),
@@ -33,9 +32,13 @@ export function createDownloadSession(getStorage = () => globalThis.localStorage
   function load() {
     try {
       const storage = getStorage();
-      const value = normalize(JSON.parse(storage.getItem(DOWNLOAD_SESSION_KEY)));
+      const saved = JSON.parse(storage.getItem(DOWNLOAD_SESSION_KEY));
+      const value = normalize(saved);
       if (!value) { storage.removeItem(DOWNLOAD_SESSION_KEY); return null; }
-      return value.profileId === (storage.getItem('downlink.activeProfileId.v1') || '') ? value : null;
+      if (Object.hasOwn(saved, 'profileId')) {
+        try { storage.setItem(DOWNLOAD_SESSION_KEY, JSON.stringify(value)); } catch { /* Recovery still works. */ }
+      }
+      return value;
     } catch { return null; }
   }
 
@@ -44,8 +47,7 @@ export function createDownloadSession(getStorage = () => globalThis.localStorage
     save(value) {
       try {
         const storage = getStorage();
-        const record = normalize({ ...value, createdAt: now(),
-          profileId: storage.getItem('downlink.activeProfileId.v1') || '' });
+        const record = normalize({ ...value, createdAt: now() });
         if (record) storage.setItem(DOWNLOAD_SESSION_KEY, JSON.stringify(record));
       } catch { /* Downloads still work when browser storage is unavailable. */ }
     },

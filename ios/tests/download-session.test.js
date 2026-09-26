@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createDownloadSession, DOWNLOAD_SESSION_KEY } from '../public/js/download-session.js';
 
 function fixture() {
-  const data = new Map([['downlink.activeProfileId.v1', 'owner']]);
+  const data = new Map();
   const storage = { getItem: key => data.get(key) ?? null,
     setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
   let time = 1000;
@@ -26,13 +26,13 @@ test('download reference survives reopening, expires, and contains no account se
   assert.equal(storage.getItem(DOWNLOAD_SESSION_KEY), null);
 });
 
-test('switching local profiles does not restore a different profile download', () => {
+test('legacy downloads recover without a profile and only the matching job is cleared', () => {
   const { storage, session } = fixture();
-  session.save(record);
-  storage.setItem('downlink.activeProfileId.v1', 'someone-else');
-  assert.equal(session.load(), null);
-  storage.setItem('downlink.activeProfileId.v1', 'owner');
+  storage.setItem(DOWNLOAD_SESSION_KEY, JSON.stringify({ ...record, createdAt: 1000, profileId: 'owner' }));
   assert.equal(session.load().jobId, record.jobId);
+  assert.equal(Object.hasOwn(session.load(), 'profileId'), false);
+  assert.equal(Object.hasOwn(JSON.parse(storage.getItem(DOWNLOAD_SESSION_KEY)), 'profileId'), false);
+  assert.equal(storage.getItem('downlink.activeProfileId.v1'), null);
   session.clear('another-job');
   assert.ok(session.load());
   session.clear(record.jobId);

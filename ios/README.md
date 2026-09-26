@@ -1,6 +1,6 @@
 # Downlink para iOS · iPhone y iPad
 
-La versión iOS es la misma web de escritorio instalada desde Safari. Comparte HTML, estilos, fondos, tipografías, perfiles y controles; usa las reglas adaptables que ya tenía el proyecto. No requiere publicar Downlink en la App Store, compilar una aplicación nativa ni pagar una membresía de Apple.
+La versión iOS es la misma web de escritorio instalada desde Safari. Comparte HTML, estilos, fondos, tipografías y controles; usa las reglas adaptables que ya tenía el proyecto. No requiere publicar Downlink en la App Store, compilar una aplicación nativa ni pagar una membresía de Apple.
 
 El iPhone muestra la interfaz. El ordenador ejecuta Node, yt-dlp y FFmpeg y prepara los archivos. Debe permanecer encendido, conectado y sin suspenderse mientras lo utilizas. No es la versión Android autónoma.
 
@@ -12,8 +12,8 @@ Todo lo específico de la PWA se mantiene dentro de `ios/`:
 ios/
   public/
     assets/icons/        # Iconos de instalación para iPhone/iPad
-    css/pwa.css          # Ajustes de pantalla e instalación
-    js/pwa.js            # Instalación y estado de conexión
+    css/pwa.css          # Ajustes de pantalla y aviso sin conexión
+    js/pwa.js            # Registro del service worker y estado de conexión
     js/download-session.js  # Recuperación de descargas
     manifest.webmanifest
     sw.js                # Inicio sin conexión
@@ -53,7 +53,7 @@ tailscale serve status
 
 Si Tailscale solicita habilitar HTTPS, completa su configuración. Abre en Safari la dirección `https://…ts.net` que devuelve el comando. Serve proporciona HTTPS dentro de tu red de Tailscale; mantén conectada la aplicación de Tailscale en el iPhone. No hace falta contratar alojamiento para esta configuración. [Documentación de Serve](https://tailscale.com/docs/reference/tailscale-cli/serve).
 
-Si ya tienes un servidor con dominio y HTTPS, puedes poner un proxy inverso delante del puerto 3000. Sirve la aplicación en la raíz del dominio; la interfaz y `/api` deben compartir origen. El alojamiento tiene que poder ejecutar Node y los conversores, además de almacenar temporalmente los archivos. Si lo expones fuera de una red privada, configura autenticación y límites de consumo; los perfiles locales no protegen el acceso al servidor.
+Si ya tienes un servidor con dominio y HTTPS, puedes poner un proxy inverso delante del puerto 3000. Sirve la aplicación en la raíz del dominio; la interfaz y `/api` deben compartir origen. El alojamiento tiene que poder ejecutar Node y los conversores, además de almacenar temporalmente los archivos. Si lo expones fuera de una red privada, configura autenticación y límites de consumo.
 
 Esta implementación no publica el proyecto ni configura cuentas, DNS, certificados o redes externas automáticamente.
 
@@ -62,15 +62,15 @@ Esta implementación no publica el proyecto ni configura cuentas, DNS, certifica
 1. Abre la dirección HTTPS de Downlink en **Safari**.
 2. Pulsa **Compartir → Añadir a pantalla de inicio**.
 3. Activa **Abrir como app web**, si aparece, y pulsa **Añadir**.
-4. Abre el icono de Downlink desde la pantalla de inicio y crea tu perfil si te lo pide. La instalación puede tener almacenamiento separado del navegador.
+4. Abre el icono de Downlink desde la pantalla de inicio: entrarás directamente en el conversor. La instalación puede tener almacenamiento separado del navegador.
 
-El menú del avatar también incluye estas instrucciones en iPhone y iPad cuando la web no está instalada. [Guía de Apple](https://support.apple.com/guide/iphone/bookmark-a-website-iph42ab2f3a7/ios).
+El botón de dos puntos contiene únicamente **Conectar Instagram**. Para instalar la web, sigue los pasos anteriores de Safari. [Guía de Apple](https://support.apple.com/guide/iphone/bookmark-a-website-iph42ab2f3a7/ios).
 
 ## Descargar y reabrir
 
 - Pega un enlace, selecciona MP4 o MP3 y la calidad, y pulsa **Descargar**.
 - Cuando el servidor termine, el mismo botón cambia a **Guardar MP4/MP3**. Púlsalo para entregar el archivo a Safari; según el archivo y la versión de iOS, utiliza Descargas o Compartir → Guardar en Archivos. El mensaje indica que se ha iniciado la entrega, no que iOS ya haya guardado el archivo.
-- Si cierras la web después de que el servidor haya devuelto el identificador de trabajo, la próxima apertura recupera ese trabajo para el mismo perfil local. No comienza otra conversión.
+- Si cierras la web después de que el servidor haya devuelto el identificador de trabajo, la próxima apertura recupera ese trabajo en el mismo navegador o instalación. No comienza otra conversión.
 - Si se pierde la conexión, aparece **Retomar descarga**. Al recuperar la conexión o volver a la app se vuelve a consultar el trabajo.
 - El servidor puede seguir convirtiendo mientras iOS suspende la interfaz. El guardado en el teléfono necesita una acción tuya.
 - Los trabajos son temporales, con una ventana de recuperación de hasta cuatro horas. Reiniciar el servidor pierde los trabajos en memoria. La aplicación explica cuándo un archivo ya no está disponible.
@@ -86,7 +86,7 @@ node node_modules/playwright-core/cli.js install webkit
 npm run test:ios
 ```
 
-Las pruebas de navegador requieren Google Chrome instalado, o su ruta en `CHROME_PATH`, y el WebKit de Playwright. Utilizan la interfaz y el service worker reales con una API de prueba y contenido sintético; no descargan contenido de plataformas ni utilizan cuentas personales. Comprueban tamaños móviles, instrucciones de instalación, MP4/MP3, guardado, cancelación, recuperación tras recarga y desconexión, caducidad y exclusión de la API de la caché. Las capturas se generan en `artifacts/ios/`, en la raíz del repositorio.
+Las pruebas de navegador requieren Google Chrome instalado, o su ruta en `CHROME_PATH`, y el WebKit de Playwright. Utilizan la interfaz y el service worker reales con una API de prueba y contenido sintético; no descargan contenido de plataformas ni utilizan cuentas personales. Comprueban tamaños móviles, el menú y la apertura de Instagram, MP4/MP3, guardado, cancelación, recuperación tras recarga y desconexión, caducidad y exclusión de la API de la caché. Las capturas se generan en `artifacts/ios/`, en la raíz del repositorio.
 
 WebKit automatizado no sustituye una prueba en un iPhone físico: quedan por comprobar en el dispositivo la instalación desde Safari, los permisos del portapapeles y el guardado mediante las ventanas de iOS.
 

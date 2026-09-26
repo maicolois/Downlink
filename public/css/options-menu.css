@@ -1,0 +1,163 @@
+.options-control {
+  position: fixed;
+  top: max(20px, env(safe-area-inset-top));
+  right: max(24px, env(safe-area-inset-right));
+  z-index: 100;
+}
+
+.options-control__button,
+.options-menu {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02) 48%, rgba(255, 255, 255, 0.06)),
+    rgba(24, 25, 31, 0.58);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    0 8px 28px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+}
+
+.options-control__button {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 44px;
+  padding: 0;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.94);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.options-control__button svg {
+  width: 24px;
+  height: 24px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+}
+
+.options-control__button:hover,
+.options-control.is-open .options-control__button {
+  border-color: rgba(255, 255, 255, 0.38);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 8px 28px rgba(0, 0, 0, 0.3);
+}
+
+.options-control__button:active {
+  transform: scale(0.96);
+}
+
+.options-control__button:focus-visible,
+.options-menu__item:focus-visible {
+  outline: 2px solid #f5f5f7;
+  outline-offset: 3px;
+}
+
+.options-menu[hidden] {
+  display: none;
+}
+
+.options-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 270px;
+  max-width: calc(100vw - 28px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  padding: 7px;
+  border-radius: 22px;
+  transform-origin: top right;
+  animation: options-menu-in 160ms ease-out;
+}
+
+.options-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 62px;
+  padding: 11px 13px;
+  border: 0;
+  border-radius: 15px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.options-menu__item:hover,
+.options-menu__item:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.options-menu__item:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.options-menu__item > svg {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+}
+
+.options-menu__copy {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+}
+
+.options-menu__copy small {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.options-menu__connection-dot {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.is-connected .options-menu__connection-dot {
+  background: #8dd9b2;
+  box-shadow: 0 0 10px rgba(141, 217, 178, 0.3);
+}
+
+@keyframes options-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 640px) {
+  .options-control {
+    top: max(14px, env(safe-area-inset-top));
+    right: max(14px, env(safe-area-inset-right));
+  }
+
+  .options-control__button {
+    width: 48px;
+  }
+}
+
+@media (max-width: 360px) {
+  .options-control__button {
+    width: 44px;
+  }
+
+  /* Reserve the touch target's height so it stays clear of the subtitle. */
+  .header__logo {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .options-control__button,
+  .options-menu__item { transition: none; }
+  .options-menu { animation: none; }
+}

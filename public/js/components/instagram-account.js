@@ -82,7 +82,7 @@ export function initializeInstagramAccount({ onChange } = {}) {
     button.disabled = busy || working;
     button.classList.toggle('is-connected', session.connected);
     button.dataset.connectionState = connection.state;
-    button.setAttribute('aria-label', `Cuenta de Instagram: ${connection.label}`);
+    button.setAttribute('aria-label', `Conectar Instagram: ${connection.label}`);
     setText(label, connection.label);
     dialog.dataset.connectionState = connection.state;
     setText(connectionStatus, connection.label);
@@ -292,7 +292,7 @@ export function initializeInstagramAccount({ onChange } = {}) {
     if (busy || operation || dialog.open) return;
     closeRequested = false;
     const activeControl = document.activeElement;
-    const menuButton = document.getElementById('profileMenuButton');
+    const menuButton = document.getElementById('optionsMenuButton');
     returnFocus = button.closest('[role="menu"]') && menuButton ? menuButton : activeControl;
     notice = '';
     showError();
