@@ -1,0 +1,65 @@
+/* The desktop styles remain the source of truth; only device insets differ. */
+@media (display-mode: standalone) {
+  .app-container,
+  body.has-video .app-container {
+    padding-top: max(24px, env(safe-area-inset-top));
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+
+  .home-controls {
+    max-width: 100%;
+  }
+}
+
+#pwaInstallButton[hidden],
+#connectionNotice[hidden] {
+  display: none;
+}
+
+.pwa-install-steps {
+  padding-left: 22px;
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+
+.pwa-install-steps strong {
+  color: var(--text-primary);
+}
+
+/* Keep the existing avatar control clear of the logo on smaller iPhones. */
+@media (max-width: 360px) {
+  .profile-control__button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 4px;
+  }
+
+  .profile-control__avatar {
+    width: 34px;
+    height: 34px;
+  }
+
+  .profile-control__chevron {
+    display: none;
+  }
+}
+
+.connection-notice {
+  position: fixed;
+  z-index: 50;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: max(16px, env(safe-area-inset-left));
+  max-width: 520px;
+  margin-inline: auto;
+  padding: 12px 18px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: rgba(20, 20, 25, 0.96);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: center;
+}
