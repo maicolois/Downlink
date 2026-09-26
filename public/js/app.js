@@ -7,6 +7,10 @@ import { initializeInputPlaceholder } from './components/input-placeholder.js';
 import { initializeInstagramAccount } from './components/instagram-account.js';
 import { initializeProfileSystem } from './components/profile-system.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
+import { apiFetch, isNativeApp, isIOSWebApp, readClipboard, saveDownload } from './platform.js';
+import { initializePwa } from './pwa.js';
+import { createDownloadSession } from './download-session.js';
+import { MP3_QUALITIES } from '/shared/mp3-qualities.js';
 
 /* ═══════════════════════════════════════════════════════════
    DOWNLINK — Frontend Logic v1.1
@@ -59,6 +63,9 @@ let isPasting = false;
 let inputRevision = 0;
 let hasUsedInitialAccountState = false;
 let currentDownloadJobId = null;
+let preparedDownload = null;
+let resumableDownload = null;
+const downloadSession = createDownloadSession();
 let downloadCancelRequested = false;
 let cancellationPromise = null;
 let resetAfterCancellation = false;
@@ -73,6 +80,7 @@ const instagramAccount = initializeInstagramAccount({ onChange: handleInstagramC
 
 function handleInstagramConnectionChange({ connected, reason }) {
   if (currentVideoInfo?.platform === 'instagram') {
+    clearDownloadReference();
     clearThumbnailTransition();
     currentVideoInfo = null;
     currentCarouselIndex = 0;
@@ -114,7 +122,7 @@ async function pasteLink() {
   syncClearButtonState();
 
   try {
-    const text = await navigator.clipboard.readText();
+    const text = await readClipboard();
     // A clipboard permission prompt can stay open while the field changes.
     if (inputRevision !== previousRevision || urlInput.value !== previousValue || urlInput.disabled || isDownloading) return;
     urlInput.focus();
@@ -162,6 +170,8 @@ function resetInterface() {
     void cancelDownload();
     return;
   }
+
+  clearDownloadReference();
 
   inputRevision += 1;
   clearTimeout(analyzeTimeout);
@@ -226,6 +236,7 @@ function resetInterface() {
     });
 
     progressBar.classList.remove('converting');
+    downloadProgress.classList.remove('is-active', 'is-indeterminate');
     progressBar.style.width = '0%';
     progressBar.style.marginLeft = '0';
     progressText.textContent = 'Preparando archivo...';
@@ -450,6 +461,7 @@ function updateVideoThumbnail(video, animate, direction) {
 }
 
 function renderSelectedVideo(animate = false, direction = 1) {
+  clearDownloadReference();
   const videos = getCarouselVideos();
   if (!videos.length) return;
 
@@ -585,7 +597,9 @@ function renderQualityOptions(animateGrid = false) {
   // Listen for quality changes
   qualityGrid.querySelectorAll('input[type="radio"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
+      clearDownloadReference();
       currentQuality = e.target.value;
+      updateDownloadBtn();
     });
   });
 
@@ -667,12 +681,15 @@ function updateDownloadBtn() {
     : videos.length > 1 ? ` · Vídeo ${currentCarouselIndex + 1}` : '';
   const textSpan = document.getElementById('downloadBtnText');
   if (textSpan) {
-    textSpan.textContent = `Descargar ${formatLabel}${carouselLabel}`;
+    textSpan.textContent = preparedDownload ? `Guardar ${preparedDownload.format.toUpperCase()}`
+      : resumableDownload ? 'Retomar descarga'
+        : `Descargar ${formatLabel}${carouselLabel}`;
   }
 }
 
 // ─── Analyze Video ──────────────────────────────────────────
 async function analyzeVideo() {
+  clearDownloadReference();
   const url = urlInput.value.trim();
   syncBackgroundState();
 
@@ -742,10 +759,55 @@ async function analyzeVideo() {
 }
 
 // ─── Download File (Job-based) ──────────────────────────────
+function clearDownloadReference() {
+  if (preparedDownload || resumableDownload) downloadComplete.classList.remove('visible');
+  if (preparedDownload) downloadSession.clear(preparedDownload.jobId);
+  if (resumableDownload) downloadSession.clear(resumableDownload.jobId);
+  preparedDownload = null;
+  resumableDownload = null;
+}
+
+async function restoreDownload() {
+  if (isNativeApp()) return;
+  const record = downloadSession.load();
+  if (!record) return;
+  currentVideoInfo = {
+    ...record.video,
+    audioQualities: MP3_QUALITIES,
+    videoFormats: [{ height: record.format === 'mp4' ? record.quality : 'best',
+      label: record.format === 'mp4' && record.quality !== 'best' ? `${record.quality}p` : 'Mejor disponible' }],
+  };
+  currentCarouselIndex = 0;
+  currentFormat = record.format;
+  urlInput.value = record.video.url;
+  formatToggle.classList.toggle('mp4-active', record.format === 'mp4');
+  formatToggle.querySelectorAll('.format-toggle__btn').forEach(button => {
+    button.classList.toggle('active', button.dataset.format === record.format);
+  });
+  renderSelectedVideo();
+  currentQuality = record.quality;
+  qualityGrid.querySelectorAll('input').forEach(input => { input.checked = input.value === record.quality; });
+  resultsPanel.classList.add('visible');
+  resumableDownload = record;
+  await downloadFile();
+}
+
 async function downloadFile() {
   if (isDownloading || !currentVideoInfo) return;
+  if (preparedDownload) {
+    try {
+      // Called directly by the user's tap, preserving Safari's user activation.
+      await saveDownload(preparedDownload.jobId, preparedDownload.filename);
+      completeText.textContent = 'Descarga iniciada · Revisa Descargas en Safari o Archivos';
+    } catch {
+      showError('No se pudo abrir el archivo. Pulsa Guardar para intentarlo de nuevo.');
+    }
+    return;
+  }
   const selectedVideo = getSelectedVideoInfo();
   if (!selectedVideo) return;
+  const resume = resumableDownload;
+  let canResume = false;
 
   isDownloading = true;
   currentDownloadJobId = null;
@@ -755,43 +817,49 @@ async function downloadFile() {
   syncClearButtonState();
   downloadBtn.disabled = true;
   downloadBtn.classList.add('downloading');
+  qualityGrid.querySelectorAll('input').forEach(input => { input.disabled = true; });
+  hideError();
   cancelDownloadBtn.hidden = false;
   cancelDownloadBtn.disabled = false;
   cancelDownloadText.textContent = 'Cancelar descarga';
   downloadComplete.classList.remove('visible');
   downloadProgress.classList.add('visible');
-  progressBar.style.animation = 'none';
-  progressBar.style.width = '0%';
-  progressBar.style.marginLeft = '0';
-  progressPercent.textContent = '0%';
-  progressText.textContent = 'Iniciando preparación...';
+  updateProgressUI({ status: 'starting', progress: '0%', progressDetail: 'Iniciando preparación...' });
 
   try {
-    await instagramAccount.refresh();
+    if (!resume) await instagramAccount.refresh();
     if (downloadCancelRequested) throw clientCancelledError();
     if (!currentVideoInfo) throw new Error('La cuenta de Instagram ha cambiado. Vuelve a analizar el enlace.');
     // 1. Iniciar el job en el servidor
-    const startRes = await fetch('/api/download', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...instagramAccount.requestHeaders() },
-      body: JSON.stringify({
-        url: currentVideoInfo.url,
-        format: currentFormat,
-        quality: currentQuality,
-        playlistItem: currentVideoInfo.platform === 'instagram' && !isInstagramStory()
-          ? selectedVideo.playlistItem
-          : null,
-        ...(isInstagramStory() ? { videoId: selectedVideo.id } : {})
-      })
-    });
+    let jobId = resume?.jobId;
+    if (!jobId) {
+      const startRes = await apiFetch('/api/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...instagramAccount.requestHeaders() },
+        body: JSON.stringify({
+          url: currentVideoInfo.url,
+          format: currentFormat,
+          quality: currentQuality,
+          playlistItem: currentVideoInfo.platform === 'instagram' && !isInstagramStory()
+            ? selectedVideo.playlistItem
+            : null,
+          ...(isInstagramStory() ? { videoId: selectedVideo.id } : {})
+        })
+      });
 
-    if (!startRes.ok) {
-      const err = await startRes.json();
-      throw new Error(err.error || 'Error al iniciar la descarga');
+      if (!startRes.ok) {
+        const err = await startRes.json();
+        throw new Error(err.error || 'Error al iniciar la descarga');
+      }
+
+      ({ jobId } = await startRes.json());
+      if (!isNativeApp()) downloadSession.save({
+        jobId, format: currentFormat, quality: currentQuality,
+        video: { ...selectedVideo, url: currentVideoInfo.url, platform: currentVideoInfo.platform },
+      });
     }
-
-    const { jobId } = await startRes.json();
     currentDownloadJobId = jobId;
+    resumableDownload = null;
     console.log(`Download job started: ${jobId}, format: ${currentFormat}, quality: ${currentQuality}`);
 
     if (downloadCancelRequested) {
@@ -806,9 +874,27 @@ async function downloadFile() {
       await new Promise(resolve => setTimeout(resolve, 900));
       if (downloadCancelRequested) break;
 
-      const statusRes = await fetch(`/api/status/${jobId}`);
-      if (!statusRes.ok) throw new Error('Error al consultar el estado');
-      status = await statusRes.json();
+      let statusRes;
+      try {
+        statusRes = await apiFetch(`/api/status/${jobId}`, {
+          cache: 'no-store', signal: AbortSignal.timeout(15_000),
+        });
+      } catch (error) {
+        canResume = true;
+        throw error;
+      }
+      if (!statusRes.ok) {
+        canResume = statusRes.status >= 500 || statusRes.status === 429;
+        throw new Error(statusRes.status === 404
+          ? 'Esta descarga ya no está disponible. Vuelve a preparar el archivo.'
+          : 'No se pudo consultar la descarga.');
+      }
+      try {
+        status = await statusRes.json();
+      } catch (error) {
+        canResume = error instanceof TypeError || error.name === 'AbortError' || error.name === 'TimeoutError';
+        throw error;
+      }
       updateProgressUI(status);
 
       if (status.status === 'ready') break;
@@ -826,20 +912,28 @@ async function downloadFile() {
     progressBar.style.width = '100%';
     progressPercent.textContent = '100%';
     cancelDownloadBtn.hidden = true;
-    const a = document.createElement('a');
-    a.href = `/api/file/${jobId}`;
-    a.download = status.filename || `download.${status.format}`;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const filename = status.filename || `download.${status.format}`;
+    const manualSave = !isNativeApp() && (isIOSWebApp() || Boolean(resume));
+    const saved = manualSave ? null : await saveDownload(jobId, filename);
+    if (manualSave) preparedDownload = { jobId, filename, format: status.format };
+    else downloadSession.clear(jobId);
 
     // 4. Mostrar éxito
     downloadProgress.classList.remove('visible');
     downloadComplete.classList.add('visible');
-    completeText.textContent = `Descarga ${currentFormat.toUpperCase()} iniciada · Revisa tu navegador`;
+    completeText.textContent = manualSave ? 'Archivo listo · Pulsa Guardar para descargarlo'
+      : isNativeApp()
+      ? (saved.saved ? `Archivo ${currentFormat.toUpperCase()} guardado` : 'Archivo preparado · Guardado cancelado')
+      : `Descarga ${currentFormat.toUpperCase()} iniciada · Revisa tu navegador`;
 
   } catch (err) {
+    if (canResume && !downloadCancelRequested && currentDownloadJobId) {
+      // The worker keeps running on the server. A retry only checks this job;
+      // it must never POST another conversion after an interrupted connection.
+      resumableDownload = { jobId: currentDownloadJobId };
+    } else if (currentDownloadJobId) {
+      downloadSession.clear(currentDownloadJobId);
+    }
     if (err.cancelled || downloadCancelRequested) {
       downloadProgress.classList.add('visible');
       progressBar.classList.remove('converting');
@@ -849,16 +943,19 @@ async function downloadFile() {
     } else {
       downloadProgress.classList.remove('visible');
       cancelDownloadBtn.hidden = true;
-      showError(err.message);
+      showError(canResume ? 'Se ha perdido la conexión. Pulsa Retomar descarga cuando vuelva a estar disponible.' : err.message);
     }
   } finally {
     currentDownloadJobId = null;
+    downloadProgress.classList.remove('is-active', 'is-indeterminate');
     cancellationPromise = null;
     isDownloading = false;
     urlInput.disabled = false;
     syncClearButtonState();
     downloadBtn.disabled = false;
     downloadBtn.classList.remove('downloading');
+    qualityGrid.querySelectorAll('input').forEach(input => { input.disabled = false; });
+    updateDownloadBtn();
     if (resetAfterCancellation) {
       resetAfterCancellation = false;
       resetInterface();
@@ -871,7 +968,7 @@ function clientCancelledError() {
 }
 
 async function requestDownloadCancellation(jobId) {
-  const response = await fetch(`/api/cancel/${jobId}`, {
+  const response = await apiFetch(`/api/cancel/${jobId}`, {
     method: 'POST',
     headers: instagramAccount.requestHeaders()
   });
@@ -905,17 +1002,22 @@ async function cancelDownload() {
 
 // ─── Update Progress UI ────────────────────────────────────
 function updateProgressUI(status) {
-  const percent = parseInt(status.progress) || 0;
+  const percent = Math.min(100, Math.max(0, parseInt(status.progress) || 0));
+  const active = ['starting', 'downloading', 'converting', 'cancelling'].includes(status.status);
+  const indeterminate = active && percent === 0;
+  downloadProgress.classList.toggle('is-active', active);
+  downloadProgress.classList.toggle('is-indeterminate', indeterminate);
 
   // Animate the progress bar to the current percentage
-  progressBar.style.animation = 'none';
-  progressBar.style.width = `${Math.min(percent, 100)}%`;
-  progressBar.style.marginLeft = '0';
-  progressPercent.textContent = status.progress || '0%';
+  progressBar.style.width = `${percent}%`;
+  progressPercent.textContent = `${percent}%`;
+  if (indeterminate) progressBar.parentElement.removeAttribute('aria-valuenow');
+  else progressBar.parentElement.setAttribute('aria-valuenow', String(percent));
 
   // Status-specific text
   if (status.progressDetail) {
     progressText.textContent = status.progressDetail;
+    progressBar.parentElement.setAttribute('aria-valuetext', status.progressDetail);
   }
 
   // Change progress bar color for converting state
@@ -1007,6 +1109,7 @@ carouselNext.addEventListener('click', () => {
 formatToggle.querySelectorAll('.format-toggle__btn').forEach(btn => {
   btn.addEventListener('click', () => {
     if (isDownloading) return; // No cambiar formato durante descarga
+    clearDownloadReference();
 
     // Update active state
     formatToggle.querySelectorAll('.format-toggle__btn').forEach(b => b.classList.remove('active'));
@@ -1029,13 +1132,22 @@ formatToggle.querySelectorAll('.format-toggle__btn').forEach(btn => {
 });
 
 // Download button
-downloadBtn.addEventListener('click', downloadFile);
+downloadBtn.addEventListener('click', () => { void downloadFile(); });
 cancelDownloadBtn.addEventListener('click', cancelDownload);
 
 // Initialize with the same resting appearance as the content view.
 initializeProfileSystem();
+initializePwa();
 initializeHomepage();
 syncBackgroundState();
+void restoreDownload();
+
+function resumeInterruptedDownload() {
+  if (resumableDownload && !isDownloading && !document.hidden && navigator.onLine) void downloadFile();
+}
+window.addEventListener('online', resumeInterruptedDownload);
+window.addEventListener('pageshow', resumeInterruptedDownload);
+document.addEventListener('visibilitychange', resumeInterruptedDownload);
 syncClearButtonState();
 window.addEventListener('pageshow', () => {
   syncBackgroundState();

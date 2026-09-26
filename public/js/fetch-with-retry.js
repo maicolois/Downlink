@@ -1,3 +1,5 @@
+import { apiFetch } from './platform.js';
+
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 function isTransientFetchError(error) {
@@ -7,7 +9,7 @@ function isTransientFetchError(error) {
 export async function fetchWithRetry(
   input,
   init,
-  { fetchImpl = globalThis.fetch, retries = 1, retryDelayMs = 300, waitImpl = wait } = {},
+  { fetchImpl = apiFetch, retries = 1, retryDelayMs = 300, waitImpl = wait } = {},
 ) {
   let attemptsRemaining = Math.max(0, Math.floor(Number(retries) || 0));
 

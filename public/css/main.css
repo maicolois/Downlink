@@ -1679,6 +1679,7 @@ body.has-video .home-intro,
 }
 
 .progress-bar-wrap {
+  position: relative;
   background: rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-pill);
   height: 10px;
@@ -1687,11 +1688,71 @@ body.has-video .home-intro,
 }
 
 .progress-bar {
+  position: relative;
+  overflow: hidden;
   height: 100%;
   background: var(--accent-primary);
   border-radius: var(--radius-pill);
   width: 0%;
   transition: width 0.3s ease;
+}
+
+.progress-bar.converting {
+  background: #a78bfa;
+}
+
+.download-progress.visible.is-active .progress-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(110deg, transparent 0 12px, rgba(255, 255, 255, 0.24) 12px 24px, transparent 24px 36px);
+  background-size: 38px 100%;
+  animation: progressFlow 1s linear infinite;
+}
+
+.download-progress.visible.is-active.is-indeterminate .progress-bar-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+  animation: progressSweep 1.6s ease-in-out infinite;
+}
+
+.progress-spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--accent-primary);
+  border-right-color: var(--accent-primary);
+  border-radius: 50%;
+}
+
+.download-progress.visible.is-active .progress-spinner {
+  display: block;
+  animation: spin 0.85s linear infinite;
+}
+
+@keyframes progressFlow {
+  to { background-position: 38px 0; }
+}
+
+@keyframes progressSweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .download-progress.visible.is-active .progress-bar::after,
+  .download-progress.visible.is-active.is-indeterminate .progress-bar-wrap::after,
+  .download-progress.visible.is-active .progress-spinner {
+    animation: none;
+  }
+
+  .progress-bar {
+    transition: none;
+  }
 }
 
 .progress-text-container {
@@ -1702,6 +1763,7 @@ body.has-video .home-intro,
 }
 
 .progress-text {
+  flex: 1;
   min-width: 0;
   font-size: 0.95rem;
   color: var(--text-secondary);
@@ -1713,6 +1775,7 @@ body.has-video .home-intro,
   flex: 0 0 auto;
   color: #fff;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .btn-cancel-download {

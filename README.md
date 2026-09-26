@@ -2,6 +2,12 @@
 
 Conversor de YouTube, X, Instagram, TikTok, Reddit y Twitch a MP4 y MP3.
 
+## iPhone y iPad · Instalar desde Safari
+
+La misma interfaz de escritorio está preparada como una PWA: icono en el inicio, apertura como app y recuperación de descargas al reabrir. No requiere publicar Downlink en la App Store. Las conversiones siguen ejecutándose en el ordenador o servidor.
+
+Proyecto iOS: [`ios/`](ios/). **[Arranque, HTTPS e instalación](ios/README.md).** Incluye una opción de acceso privado con tu ordenador y las limitaciones del guardado y de Instagram.
+
 ## Aplicación Android · POCO X7 Pro
 
 La versión Android funciona directamente en el móvil, con yt-dlp, Python, QuickJS y FFmpeg incluidos. No necesita arrancar Node ni conectar el teléfono a un servidor.
@@ -30,6 +36,7 @@ public/
   assets/       # Avatares, iconos y recursos gráficos públicos
   css/          # Estilos de la interfaz
   js/           # Código del navegador, separado por componentes y fondos
+ios/            # PWA para iPhone/iPad: instalación, iconos, recursos y pruebas
 references/
   backgrounds/  # Vídeos usados como referencia visual; no se sirven al navegador
 server/

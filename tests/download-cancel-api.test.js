@@ -10,7 +10,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
-test('cancelling an active download stops its process and removes partial files', { timeout: 20_000 }, async t => {
+test('YouTube and Twitch report download details and cancellation removes partial files', { timeout: 20_000 }, async t => {
   const socket = net.createServer();
   socket.listen(0, '127.0.0.1');
   await once(socket, 'listening');
@@ -72,6 +72,15 @@ test('cancelling an active download stops its process and removes partial files'
   }
   assert.equal(partialAppeared, true, logs);
 
+  let progress;
+  for (let index = 0; index < 50; index += 1) {
+    progress = await (await fetch(`${base}/api/status/${jobId}`)).json();
+    if (progress.progressDetail.includes('Velocidad:')) break;
+    await delay(25);
+  }
+  assert.equal(progress.status, 'downloading');
+  assert.equal(progress.progressDetail, 'Descargando archivo · Velocidad: 1 MB/s · 30 s restantes');
+
   const cancelled = await fetch(`${base}/api/cancel/${jobId}`, { method: 'POST' });
   assert.equal(cancelled.status, 200);
   assert.deepEqual(await cancelled.json(), { status: 'cancelled' });
@@ -97,4 +106,23 @@ test('cancelling an active download stops its process and removes partial files'
   const startingStatus = await (await fetch(`${base}/api/status/${startingJobId}`)).json();
   assert.equal(startingStatus.status, 'cancelled');
   assert.equal(fs.readdirSync(path.join(root, 'downloads')).some(file => file.startsWith(`${startingJobId}.`)), false);
+
+  const twitchStarted = await fetch(`${base}/api/download`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: 'https://www.twitch.tv/videos/1234567890', format: 'mp4', quality: 'best' }),
+  });
+  assert.equal(twitchStarted.status, 200);
+  const twitchJobId = (await twitchStarted.json()).jobId;
+  jobIds.push(twitchJobId);
+  for (let index = 0; index < 50; index += 1) {
+    progress = await (await fetch(`${base}/api/status/${twitchJobId}`)).json();
+    if (progress.progressDetail.includes('Velocidad:')) break;
+    await delay(25);
+  }
+  assert.equal(progress.status, 'downloading', logs);
+  assert.equal(progress.progress, '25%');
+  assert.match(progress.progressDetail, /^Descargando archivo · Velocidad: [\d,]+ (?:B|KB|MB)\/s · 23 s restantes$/);
+  assert.equal((await fetch(`${base}/api/cancel/${twitchJobId}`, { method: 'POST' })).status, 200);
+  assert.equal((await (await fetch(`${base}/api/status/${twitchJobId}`)).json()).status, 'cancelled');
+  assert.equal(fs.readdirSync(path.join(root, 'downloads')).some(file => file.startsWith(`${twitchJobId}.`)), false);
 });

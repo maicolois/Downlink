@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  createFfmpegProgressParser,
   formatDownloadProgress,
   formatDownloadSpeed,
   formatRemainingTime,
@@ -21,6 +22,65 @@ test('parses FFmpeg HLS timestamps used by Twitch download progress', () => {
   assert.equal(parseFfmpegOutTime('out_time=12:34:56.000000'), 45296);
   assert.equal(parseFfmpegOutTime('out_time_ms=323500000'), null);
   assert.equal(parseFfmpegOutTime('out_time=00:61:00.000000'), null);
+});
+
+function ffmpegSnapshot(parse, { seconds = '00:00:10.000000', size = '2000000', speed = '2x', progress = 'continue' } = {}) {
+  for (const line of [`total_size=${size}`, `out_time=${seconds}`, `speed= ${speed}`]) {
+    assert.equal(parse(line), null);
+  }
+  return parse(`progress=${progress}`);
+}
+
+test('shows Twitch percentage, transfer speed and ETA using the same labels as YouTube', () => {
+  let now = 0;
+  const parse = createFfmpegProgressParser({ duration: 60, now: () => now });
+  assert.deepEqual(ffmpegSnapshot(parse), {
+    progress: '17%',
+    detail: 'Descargando archivo · Velocidad: 400 KB/s · 25 s restantes',
+    finalizing: false,
+  });
+
+  now = 2000;
+  assert.deepEqual(ffmpegSnapshot(parse, { seconds: '00:00:20.000000', size: '4000000', speed: '5x' }), {
+    progress: '33%',
+    detail: 'Descargando archivo · Velocidad: 1 MB/s · 8 s restantes',
+    finalizing: false,
+  });
+});
+
+test('handles missing FFmpeg metrics, stalls and new transfers without stale or negative estimates', () => {
+  let now = 0;
+  const parse = createFfmpegProgressParser({ duration: 60, now: () => now });
+  assert.equal(parse('unrelated diagnostic'), null);
+  assert.deepEqual(ffmpegSnapshot(parse, { seconds: 'N/A', size: 'N/A', speed: 'N/A' }), {
+    progress: null, detail: 'Descargando archivo', finalizing: false,
+  });
+  now = 1000;
+  ffmpegSnapshot(parse);
+  now = 2000;
+  assert.equal(ffmpegSnapshot(parse, { speed: '0x' }).detail, 'Descargando archivo · Velocidad: 0 B/s');
+  now = 3000;
+  assert.equal(ffmpegSnapshot(parse, { seconds: '00:00:12.000000', size: '3000000', speed: 'N/A' }).detail,
+    'Descargando archivo · Velocidad: 1 MB/s · 24 s restantes');
+  now = 4000;
+  assert.equal(ffmpegSnapshot(parse).detail, 'Descargando archivo · Velocidad: 400 KB/s · 25 s restantes');
+  now = 5000;
+  assert.deepEqual(parse('progress=continue'), {
+    progress: null, detail: 'Descargando archivo', finalizing: false,
+  });
+});
+
+test('reports speed without a known duration and keeps completion below 100 until the file is ready', () => {
+  const unknown = createFfmpegProgressParser();
+  assert.deepEqual(ffmpegSnapshot(unknown), {
+    progress: null, detail: 'Descargando archivo · Velocidad: 400 KB/s', finalizing: false,
+  });
+  assert.deepEqual(ffmpegSnapshot(unknown, { progress: 'end' }), {
+    progress: '99%', detail: 'Finalizando archivo...', finalizing: true,
+  });
+  assert.deepEqual(ffmpegSnapshot(createFfmpegProgressParser({ duration: 10 })), {
+    progress: '99%', detail: 'Finalizando archivo...', finalizing: true,
+  });
 });
 
 test('rejects truncated Twitch durations while allowing final-segment tolerance', () => {

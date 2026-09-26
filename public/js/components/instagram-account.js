@@ -1,3 +1,5 @@
+import { apiFetch, isNativeApp } from '../platform.js';
+
 const SESSION_ENDPOINT = '/api/instagram/session';
 const ACCOUNT_ENDPOINT = '/api/instagram/';
 const CONNECTION_SIGNAL = 'instagram-connection-changed';
@@ -89,15 +91,17 @@ export function initializeInstagramAccount({ onChange } = {}) {
     setText(title, connection.title);
     setText(description, session.connected
       ? connectedDescription()
-      : 'Inicia sesión directamente en Instagram. Tu sesión se guardará temporalmente en este equipo para descargar vídeos que tu cuenta pueda ver.');
+      : `Inicia sesión directamente en Instagram. Tu sesión se guardará temporalmente en ${isNativeApp() ? 'este dispositivo' : 'este equipo'} para descargar vídeos que tu cuenta pueda ver.`);
 
     let status = notice;
     if (!loaded) status = 'Comprobando la conexión…';
     else if (session.available === false) status = 'La conexión está disponible al abrir la aplicación en el equipo donde se ejecuta.';
-    else if (operation === 'login/start') status = 'Abriendo una ventana de Instagram…';
+    else if (operation === 'login/start') status = isNativeApp() ? 'Abriendo Instagram…' : 'Abriendo una ventana de Instagram…';
     else if (operation === 'login/complete') status = 'Comprobando tu inicio de sesión…';
     else if (operation === 'disconnect') status = 'Desconectando tu cuenta…';
-    else if (session.pending) status = 'Completa el inicio de sesión en la ventana de Instagram, incluidos sus pasos de verificación. Luego vuelve aquí.';
+    else if (session.pending) status = isNativeApp()
+      ? 'Completa el inicio de sesión en Instagram y confirma la conexión.'
+      : 'Completa el inicio de sesión en la ventana de Instagram, incluidos sus pasos de verificación. Luego vuelve aquí.';
     setText(stateMessage, status);
     stateMessage.hidden = !status;
 
@@ -191,7 +195,7 @@ export function initializeInstagramAccount({ onChange } = {}) {
     const revision = ++requestRevision;
     refreshPromise = (async () => {
       try {
-        const response = await fetch(SESSION_ENDPOINT, { credentials: 'same-origin', cache: 'no-store' });
+        const response = await apiFetch(SESSION_ENDPOINT, { credentials: 'same-origin', cache: 'no-store' });
         const value = await readResponse(response);
         if (revision === requestRevision) {
           if (clearError) showError();
@@ -234,7 +238,7 @@ export function initializeInstagramAccount({ onChange } = {}) {
       if (!session.csrfToken || !session.available) return;
       if (closeRequested && action === 'login/start') return;
       requestRevision += 1;
-      const response = await fetch(`${ACCOUNT_ENDPOINT}${action}`, {
+      const response = await apiFetch(`${ACCOUNT_ENDPOINT}${action}`, {
         method: 'POST',
         credentials: 'same-origin',
         cache: 'no-store',
@@ -243,7 +247,7 @@ export function initializeInstagramAccount({ onChange } = {}) {
       });
       const value = await readResponse(response);
       requestRevision += 1;
-      const reason = action === 'login/complete' && value.connected
+      const reason = ['login/complete', 'login/start'].includes(action) && value.connected
         ? 'connected'
         : action === 'disconnect' ? 'disconnected' : 'refresh';
       applySession(value, { reason });

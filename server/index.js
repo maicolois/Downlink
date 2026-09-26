@@ -1,4 +1,5 @@
 import express from 'express';
+import { mountIosAssets } from '../ios/server.js';
 import cors from 'cors';
 import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { createRequire } from 'module';
+import { createInterface } from 'node:readline';
 import { PlatformRegistry } from './platforms/common/platform-registry.js';
 import { YouTubeProvider } from './platforms/youtube/youtube-provider.js';
 import { XProvider } from './platforms/x/x-provider.js';
@@ -26,9 +28,9 @@ import {
   getViewCount
 } from './platforms/common/video-metadata.js';
 import {
+  createFfmpegProgressParser,
   formatDownloadProgress,
   isDownloadDurationComplete,
-  parseFfmpegOutTime,
   parseYtDlpProgress,
   YT_DLP_PROGRESS_ARGS,
 } from './services/download-progress.js';
@@ -193,7 +195,14 @@ app.use(express.json());
 app.use('/api', instagramAuth.middleware);
 app.use('/api/instagram', instagramAuth.router);
 app.use(cors());
-app.use(express.static(path.join(PROJECT_ROOT, 'public')));
+mountIosAssets(app);
+app.use(express.static(path.join(PROJECT_ROOT, 'public'), {
+  setHeaders(res, filePath) {
+    if (path.basename(filePath) === 'index.html') {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  },
+}));
 app.use('/shared', express.static(path.join(PROJECT_ROOT, 'shared')));
 
 // ─── In-memory Job Store ────────────────────────────────────────────────────────
@@ -564,13 +573,15 @@ function runJobProcess(job, executable, args, label) {
     trackProtectedProcess(job.instagramContext, proc);
     job.process = proc;
     let stderr = '';
+    const parseFfmpegProgress = createFfmpegProgressParser({ duration: job.duration });
 
-    proc.stdout?.on('data', data => {
-      for (const line of data.toString().split('\n')) parseProgress(job, line);
-    });
+    for (const stream of [proc.stdout, proc.stderr]) {
+      if (!stream) continue;
+      createInterface({ input: stream, crlfDelay: Infinity })
+        .on('line', line => parseProgress(job, line, parseFfmpegProgress));
+    }
     proc.stderr?.on('data', data => {
       stderr += data.toString();
-      for (const line of data.toString().split('\n')) parseProgress(job, line);
     });
 
     proc.once('close', code => {
@@ -680,6 +691,9 @@ async function performDownloadJob(job, provider) {
 
       console.log(`[Job ${job.id.slice(0, 8)}] Converting to MP3 with FFmpeg: ${ffmpegExecutable} -i ${audioInputPath} -c:a libmp3lame -b:a ${bitrate}k ${finalFilePath}`);
 
+      job.status = 'converting';
+      job.progress = '99%';
+      job.progressDetail = 'Convirtiendo a MP3...';
       await runJobProcess(job, ffmpegExecutable, [
           '-hide_banner',
           '-loglevel', 'error',
@@ -778,7 +792,7 @@ function failDownloadJob(job, err) {
 }
 
 // ─── Parsear progreso de yt-dlp ─────────────────────────────────────────────────
-function parseProgress(job, line) {
+function parseProgress(job, line, parseFfmpegProgress) {
   if (!line || !line.trim()) return;
   if (job.cancelled) return;
   job.lastActivity = Date.now();
@@ -791,12 +805,11 @@ function parseProgress(job, line) {
     return;
   }
 
-  const ffmpegOutTime = parseFfmpegOutTime(line);
-  if (ffmpegOutTime !== null && Number.isFinite(job.duration) && job.duration > 0) {
-    const percent = (ffmpegOutTime / job.duration) * 100;
-    job.progress = `${Math.min(99, Math.max(0, Math.round(percent)))}%`;
-    job.progressDetail = 'Descargando archivo';
-    job.status = 'downloading';
+  const ffmpegProgress = parseFfmpegProgress(line);
+  if (ffmpegProgress) {
+    if (ffmpegProgress.progress) job.progress = ffmpegProgress.progress;
+    job.progressDetail = ffmpegProgress.detail;
+    job.status = ffmpegProgress.finalizing ? 'converting' : 'downloading';
     return;
   }
 
@@ -969,16 +982,10 @@ app.get('/api/file/:jobId', (req, res) => {
     stream.pipe(res);
 
     stream.on('end', () => {
-      // Limpiar después de que el usuario descargue
-      setTimeout(() => {
-        try {
-          if (fs.existsSync(job.filePath)) {
-            fs.unlinkSync(job.filePath);
-            console.log(`[Job ${job.id.slice(0, 8)}] File cleaned up`);
-          }
-        } catch (e) { /* ignore */ }
-        jobs.delete(job.id);
-      }, 30000); // Esperar 30s por si descarga de nuevo
+      // Safari may preview the file before the user saves it. Keep it available
+      // for another explicit save; the existing four-hour cleanup and session
+      // revocation still remove it. Never delete a file merely for previewing it.
+      job.lastActivity = Date.now();
     });
 
     stream.on('error', (err) => {

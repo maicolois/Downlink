@@ -129,6 +129,60 @@ export function parseFfmpegOutTime(line) {
   return (hours * 3600) + (minutes * 60) + seconds;
 }
 
+// FFmpeg sends a snapshot as several key=value lines, ending with progress=.
+// Keep each process's samples together so time, size and speed agree.
+export function createFfmpegProgressParser({ duration, now = () => performance.now() } = {}) {
+  let snapshot = {};
+  let previous = null;
+
+  return line => {
+    const match = String(line || '').trim().match(/^(total_size|out_time|speed|progress)=(.*)$/);
+    if (!match) return null;
+    const [, key, value] = match;
+    snapshot[key] = value.trim();
+    if (key !== 'progress') return null;
+
+    const current = snapshot;
+    snapshot = {};
+    if (!['continue', 'end'].includes(current.progress)) return null;
+
+    const seconds = parseFfmpegOutTime(`out_time=${current.out_time}`);
+    const bytes = /^\d+$/.test(current.total_size || '') ? Number(current.total_size) : null;
+    const rateMatch = (current.speed || '').match(/^(\d+(?:\.\d+)?)x$/);
+    let rate = rateMatch ? Number(rateMatch[1]) : null;
+    const timestamp = now();
+    const elapsed = previous ? (timestamp - previous.timestamp) / 1000 : 0;
+    const sameTransfer = previous && elapsed > 0
+      && (seconds === null || previous.seconds === null || seconds >= previous.seconds)
+      && (bytes === null || previous.bytes === null || bytes >= previous.bytes);
+
+    if (rate === null && sameTransfer && seconds !== null && previous.seconds !== null) {
+      rate = (seconds - previous.seconds) / elapsed;
+    }
+    const bytesPerSecond = sameTransfer && bytes !== null && previous.bytes !== null
+      ? (bytes - previous.bytes) / elapsed
+      : (bytes !== null && seconds > 0 && rate !== null ? (bytes / seconds) * rate : null);
+    previous = { timestamp, seconds, bytes };
+
+    const hasDuration = Number.isFinite(duration) && duration > 0;
+    const percent = hasDuration && seconds !== null ? (seconds / duration) * 100 : null;
+    const finalizing = current.progress === 'end' || (percent !== null && percent >= 100);
+    const remaining = hasDuration && seconds !== null && rate > 0
+      ? Math.ceil(Math.max(0, duration - seconds) / rate)
+      : null;
+    const eta = Number.isFinite(remaining)
+      ? `${Math.floor(remaining / 3600)}:${Math.floor(remaining / 60) % 60}:${remaining % 60}`
+      : '';
+    const speed = Number.isFinite(bytesPerSecond) ? `${bytesPerSecond}B/s` : '';
+
+    return {
+      progress: finalizing ? '99%' : (percent === null ? null : `${Math.min(99, Math.max(0, Math.round(percent)))}%`),
+      detail: finalizing ? 'Finalizando archivo...' : formatDownloadProgress(speed, eta),
+      finalizing,
+    };
+  };
+}
+
 export function isDownloadDurationComplete(actualDuration, expectedDuration, toleranceSeconds = 30) {
   const actual = Number(actualDuration);
   const expected = Number(expectedDuration);

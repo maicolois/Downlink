@@ -2,7 +2,11 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#08090b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Downlink">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Downlink — Convierte vídeos de YouTube, X, Instagram, TikTok, Reddit y Twitch a MP3 y MP4.">
   <title>Downlink — YouTube, X, Instagram, TikTok, Reddit y Twitch</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -10,6 +14,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=Metal+Mania&amp;family=Spicy+Rice&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/main.css">
   <link rel="stylesheet" href="/css/profile.css">
+  <link rel="stylesheet" href="/css/pwa.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="icon" href="/assets/icons/favicon.svg" type="image/svg+xml">
 </head>
 <body>
@@ -140,6 +147,10 @@
               <small id="instagramAccountLabel">Comprobando conexión…</small>
             </span>
             <span class="profile-menu__connection-dot" aria-hidden="true"></span>
+          </button>
+          <button id="pwaInstallButton" type="button" role="menuitem" aria-haspopup="dialog" aria-controls="pwaInstallDialog" hidden>
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M9 12h6M12 9v6M10 19h4"/></svg>
+            Instalar en el iPhone o iPad
           </button>
           <button id="profileSignOutButton" class="profile-menu__signout" type="button" role="menuitem">
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10"/></svg>
@@ -391,10 +402,11 @@
 
         <!-- Progress -->
         <div id="downloadProgress" class="download-progress">
-          <div class="progress-bar-wrap">
+          <div class="progress-bar-wrap" role="progressbar" aria-label="Progreso de preparación del archivo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
             <div class="progress-bar" id="progressBar"></div>
           </div>
           <div class="progress-text-container">
+            <span class="progress-spinner" aria-hidden="true"></span>
             <p class="progress-text" id="progressText">Preparando archivo...</p>
             <p class="progress-text" id="progressPercent">0%</p>
           </div>
@@ -549,6 +561,26 @@
     </div>
   </dialog>
 
+  <dialog id="pwaInstallDialog" class="instagram-dialog" aria-labelledby="pwaInstallTitle">
+    <div class="instagram-dialog__glow" aria-hidden="true"></div>
+    <div class="instagram-dialog__page">
+    <p class="instagram-dialog__brand">down<span class="brand-link">link</span></p>
+    <section class="instagram-dialog__content">
+      <h2 id="pwaInstallTitle" class="instagram-dialog__title">Downlink en tu pantalla de inicio.</h2>
+      <p class="instagram-dialog__description">Abre esta dirección en Safari y añade Downlink como una app.</p>
+      <ol class="pwa-install-steps">
+        <li>Pulsa <strong>Compartir</strong> en Safari.</li>
+        <li>Elige <strong>Añadir a pantalla de inicio</strong>.</li>
+        <li>Activa <strong>Abrir como app web</strong>, si aparece, y pulsa <strong>Añadir</strong>.</li>
+      </ol>
+      <p class="instagram-dialog__privacy">Necesitas conexión y que el equipo que prepara tus descargas esté encendido.</p>
+      <div class="instagram-dialog__actions">
+        <button id="pwaInstallClose" class="instagram-dialog__button instagram-dialog__button--primary" type="button">Entendido</button>
+      </div>
+    </section>
+    </div>
+  </dialog>
+  <p id="connectionNotice" class="connection-notice" role="status" hidden></p>
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>

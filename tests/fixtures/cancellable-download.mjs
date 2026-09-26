@@ -63,6 +63,13 @@ childProcess.spawn = (executable, args) => {
     fs.writeFileSync(partialPath, 'partial download');
     let percent = 1;
     timer = setInterval(() => {
+      if (args.at(-1).includes('twitch.tv')) {
+        // Child-process chunks can split both FFmpeg keys and values.
+        proc.stderr.write('total_si');
+        proc.stderr.write('ze=3000000\r\nout_time=00:00:');
+        proc.stderr.write('15.000000\r\nspeed= 2x\r\nprogress=continue\r\n');
+        return;
+      }
       proc.stdout.write(`downlink-progress:${percent}%|1.0MiB/s|00:30\n`);
       percent = Math.min(percent + 1, 90);
     }, 25);
