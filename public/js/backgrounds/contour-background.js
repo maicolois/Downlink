@@ -1,7 +1,6 @@
-import { createWaveBackground } from './wave-background.js';
-
 const PIXEL_BUDGET = 2_400_000;
 const TRAIL_POINT_COUNT = 7;
+const BACKGROUND = [8 / 255, 9 / 255, 11 / 255];
 const VERTEX_SHADER = `#version 300 es
 in vec2 aPosition;
 
@@ -20,6 +19,7 @@ uniform vec2 uTrailPositions[7];
 uniform vec2 uTrailDirections[7];
 uniform float uTrailStrengths[7];
 uniform float uTime;
+uniform float uLineOpacity;
 
 out vec4 outputColor;
 
@@ -88,9 +88,12 @@ void main() {
 
   float band = mod(floor((height + 3.0) * contourScale), 3.0);
   float emphasis = 1.0 - step(0.5, band);
-  float alpha = line * mix(0.22, 0.32, emphasis);
+  float alpha = line * mix(0.22, 0.32, emphasis) * uLineOpacity;
   vec3 color = mix(vec3(0.54, 0.58, 0.64), vec3(0.65, 0.69, 0.75), emphasis);
-  outputColor = vec4(color, alpha);
+  // Paint the same opaque sRGB black on every GPU. Do not ask the browser
+  // compositor to blend a transparent WebGL drawing over the page.
+  vec3 background = vec3(8.0, 9.0, 11.0) / 255.0;
+  outputColor = vec4(mix(background, color, alpha), 1.0);
 }
 `;
 
@@ -128,11 +131,24 @@ function createProgram(gl) {
   return program;
 }
 
+function createStaticContourBackground(canvas) {
+  const noop = () => {};
+  let backdrop;
+  if (canvas) {
+    backdrop = document.createElement('div');
+    backdrop.className = `${canvas.className} home-background-canvas--static`;
+    backdrop.setAttribute('aria-hidden', 'true');
+    canvas.replaceWith(backdrop);
+  }
+  return { resize: noop, setActive: noop, setPointer: noop, clearPointer: noop,
+    destroy: () => backdrop?.remove() };
+}
+
 export function createContourBackground(canvas) {
   let gl;
   try {
     gl = canvas?.getContext('webgl2', {
-      alpha: true,
+      alpha: false,
       antialias: false,
       depth: false,
       premultipliedAlpha: false,
@@ -142,9 +158,9 @@ export function createContourBackground(canvas) {
   } catch {
     gl = null;
   }
-  if (!gl) return createWaveBackground(canvas);
+  if (!gl) return createStaticContourBackground(canvas);
+  if ('drawingBufferColorSpace' in gl) gl.drawingBufferColorSpace = 'srgb';
 
-  const noop = () => {};
   let program = null;
   let positionBuffer = null;
   let uniforms = null;
@@ -196,15 +212,18 @@ export function createContourBackground(canvas) {
       trailDirections: gl.getUniformLocation(program, 'uTrailDirections[0]'),
       trailStrengths: gl.getUniformLocation(program, 'uTrailStrengths[0]'),
       time: gl.getUniformLocation(program, 'uTime'),
+      lineOpacity: gl.getUniformLocation(program, 'uLineOpacity'),
     };
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.BLEND);
-    gl.clearColor(0, 0, 0, 0);
+    gl.clearColor(...BACKGROUND, 1);
     return true;
   }
 
   if (!setupGraphics()) {
-    return { resize: noop, setActive: noop, setPointer: noop, clearPointer: noop, destroy: noop };
+    if (positionBuffer) gl.deleteBuffer(positionBuffer);
+    if (program) gl.deleteProgram(program);
+    return createStaticContourBackground(canvas);
   }
 
   function stop() {
@@ -290,6 +309,9 @@ export function createContourBackground(canvas) {
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(program);
     gl.uniform2f(uniforms.resolution, canvas.width, canvas.height);
+    // Keep line coverage comparable to the desktop's 1000px reference,
+    // including portrait/landscape changes and the renderer's pixel budget.
+    gl.uniform1f(uniforms.lineOpacity, Math.min(1, Math.min(canvas.width, canvas.height) / 1000));
     gl.uniform2f(
       uniforms.pointerPosition,
       pointer.x * pixelRatio,

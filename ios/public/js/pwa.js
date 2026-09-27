@@ -1,7 +1,8 @@
-import { isNativeApp } from './platform.js';
+import { isIOSWebApp, isNativeApp } from './platform.js';
 
 export function initializePwa() {
   if (isNativeApp()) return;
+  document.documentElement.classList.toggle('is-ios', isIOSWebApp());
   const notice = document.getElementById('connectionNotice');
   const syncConnection = () => {
     notice.hidden = navigator.onLine;

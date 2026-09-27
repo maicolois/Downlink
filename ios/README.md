@@ -64,7 +64,7 @@ Esta implementación no publica el proyecto ni configura cuentas, DNS, certifica
 3. Activa **Abrir como app web**, si aparece, y pulsa **Añadir**.
 4. Abre el icono de Downlink desde la pantalla de inicio: entrarás directamente en el conversor. La instalación puede tener almacenamiento separado del navegador.
 
-El botón de dos puntos contiene únicamente **Conectar Instagram**. Para instalar la web, sigue los pasos anteriores de Safari. [Guía de Apple](https://support.apple.com/guide/iphone/bookmark-a-website-iph42ab2f3a7/ios).
+El botón de tres puntos contiene únicamente **Conectar Instagram**. Para instalar la web, sigue los pasos anteriores de Safari. [Guía de Apple](https://support.apple.com/guide/iphone/bookmark-a-website-iph42ab2f3a7/ios).
 
 ## Descargar y reabrir
 

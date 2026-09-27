@@ -51,7 +51,7 @@ Los directorios `bin/` y `downloads/` se crean durante la ejecución y no se inc
 
 ## Menú de opciones
 
-La web se abre directamente en el conversor. El botón de dos puntos con efecto Liquid Glass, en la esquina superior derecha, contiene únicamente **Conectar Instagram**. El diseño y el menú son los mismos en escritorio y en la PWA de iOS.
+La web se abre directamente en el conversor. El botón de tres puntos con efecto Liquid Glass, en la esquina superior derecha, contiene únicamente **Conectar Instagram**. El diseño y el menú son los mismos en escritorio y en la PWA de iOS.
 
 ## Stories de Instagram
 
@@ -69,7 +69,7 @@ Se muestran **stories en vídeo**; las fotografías no se convierten. Las storie
 ### Conectar Instagram en este equipo
 
 1. Abre la aplicación en `http://localhost:3000` en el mismo ordenador donde ejecutas el servidor. Ten instalado Google Chrome o Microsoft Edge.
-2. Abre el botón de dos puntos de la esquina superior derecha, entra en **Conectar Instagram** y pulsa **Abrir Instagram**.
+2. Abre el botón de tres puntos de la esquina superior derecha, entra en **Conectar Instagram** y pulsa **Abrir Instagram**.
 3. Completa el inicio de sesión y cualquier verificación directamente en la ventana de `instagram.com`. Esa ventana utiliza una sesión nueva, separada de tu navegador habitual.
 4. Vuelve al conversor y pulsa **Ya he iniciado sesión**. Mantén abierta la ventana de Instagram hasta confirmar.
 5. Pega una story, un perfil o `@usuario`. Si ya había un enlace de Instagram en el campo, se vuelve a analizar al conectar.
@@ -80,7 +80,7 @@ Esta conexión está diseñada para **uso local**. No abre el navegador de un vi
 
 ### Duración y desconexión
 
-La conexión dura como máximo **8 horas**, o menos si caduca la sesión de Instagram, y termina al reiniciar el servidor. Para retirarla, abre **Conectar Instagram** desde el menú de dos puntos y pulsa **Desconectar cuenta**. Se elimina su acceso en esta aplicación; esto no equivale a revocar todas las sesiones de la cuenta en Instagram.
+La conexión dura como máximo **8 horas**, o menos si caduca la sesión de Instagram, y termina al reiniciar el servidor. Para retirarla, abre **Conectar Instagram** desde el menú de tres puntos y pulsa **Desconectar cuenta**. Se elimina su acceso en esta aplicación; esto no equivale a revocar todas las sesiones de la cuenta en Instagram.
 
 La aplicación no recibe tu contraseña ni tus códigos de verificación. Tras tu confirmación, conserva en memoria únicamente las cookies de Instagram de la ventana que ha abierto. Para cada extracción crea un archivo temporal independiente y lo elimina al terminar. No importa el perfil habitual ni guarda capturas o grabaciones del inicio de sesión.
 

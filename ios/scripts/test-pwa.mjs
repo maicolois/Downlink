@@ -64,7 +64,27 @@ const waitUntil = async condition => {
   throw new Error('Timed out waiting for browser behavior');
 };
 
-async function prepare(context) {
+async function prepare(context, { fallback = false } = {}) {
+  await context.addInitScript(() => {
+    // Read the real framebuffer during its first draw. CSS color assertions
+    // alone cannot catch a transparent or incorrectly composited WebGL canvas.
+    const draw = WebGL2RenderingContext.prototype.drawArrays;
+    WebGL2RenderingContext.prototype.drawArrays = function (...args) {
+      draw.apply(this, args);
+      if (window.backgroundPixels || !this.canvas.classList.contains('home-background-canvas')) return;
+      const pixels = new Uint8Array(this.drawingBufferWidth * this.drawingBufferHeight * 4);
+      this.readPixels(0, 0, this.drawingBufferWidth, this.drawingBufferHeight, this.RGBA, this.UNSIGNED_BYTE, pixels);
+      let black = 0, opaque = 0, light = 0, peak = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i] === 8 && pixels[i + 1] === 9 && pixels[i + 2] === 11) black += 1;
+        if (pixels[i + 3] === 255) opaque += 1;
+        light += (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+        peak = Math.max(peak, pixels[i + 2]);
+      }
+      const count = pixels.length / 4;
+      window.backgroundPixels = { black: black / count, opaque: opaque / count, light: light / count, peak };
+    };
+  });
   const page = await context.newPage();
   const errors = [];
   const diagnostics = { networkOutage: false };
@@ -78,6 +98,22 @@ async function prepare(context) {
   await page.goto(base);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+  if (fallback) {
+    await page.locator('.home-background-canvas--static').waitFor();
+    const style = await page.locator('.home-background-canvas--static').evaluate(e => {
+      const css = getComputedStyle(e);
+      return { image: css.backgroundImage, base: css.backgroundColor };
+    });
+    assert.match(style.image, /contours-fallback\.png/);
+    assert.equal(style.base, 'rgb(8, 9, 11)');
+  } else {
+    await page.waitForFunction(() => Boolean(window.backgroundPixels));
+    const pixels = await page.evaluate(() => window.backgroundPixels);
+    assert.equal(pixels.opaque, 1, 'The renderer must paint an opaque background on every device');
+    assert.ok(pixels.black > 0.5, 'Most of the backdrop must retain the exact desktop black');
+    assert.ok(pixels.light >= 9 && pixels.light < 15, 'Contours must not wash out the background');
+    assert.ok(pixels.peak > 11 && pixels.peak < 80, 'The dark contours must still be drawn');
+  }
   return { page, errors, diagnostics };
 }
 
@@ -87,7 +123,7 @@ async function menuChecks(page, name) {
   const instagram = page.locator('#instagramAccountButton');
   assert.equal(await page.locator('#profileGate, #profileControl, #pwaInstallButton').count(), 0);
   assert.equal(await page.locator('#urlInput').isEnabled(), true, 'Fresh visitors enter directly');
-  assert.equal(await trigger.locator('circle').count(), 2);
+  assert.equal(await trigger.locator('circle').count(), 3);
   await trigger.click();
   assert.equal(await trigger.getAttribute('aria-expanded'), 'true');
   assert.equal(await menu.isVisible(), true);
@@ -241,6 +277,18 @@ try {
   await page.screenshot({ path: path.join(output, 'desktop-after.png'), fullPage: true, animations: 'disabled' });
   await desktop.close();
   console.log('Desktop layout preserved');
+  const fallbackContext = await chrome.newContext({ ...devices['iPhone 13'] });
+  await fallbackContext.addInitScript(() => {
+    const getContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+      return type === 'webgl2' ? null : getContext.call(this, type, ...args);
+    };
+  });
+  const fallback = await prepare(fallbackContext, { fallback: true });
+  assert.deepEqual(fallback.errors, []);
+  await fallback.page.screenshot({ path: path.join(output, 'iphone-background-fallback.png'), fullPage: true });
+  await fallbackContext.close();
+  console.log('Opaque desktop black, contour contrast and the no-WebGL fallback verified');
   if (!process.argv.includes('--webkit-only')) await mobileChecks(chrome, 'chromium-iphone');
   safari = await webkit.launch();
   await mobileChecks(safari, 'webkit-iphone');

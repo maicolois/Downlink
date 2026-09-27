@@ -1,6 +1,6 @@
 // Bump this version whenever the app shell changes. Updates activate after the
 // existing windows close, so an in-progress download is never forcibly reloaded.
-const CACHE = 'downlink-shell-v2';
+const CACHE = 'downlink-shell-v5';
 const SHELL = [
   '/', '/index.html', '/manifest.webmanifest',
   '/css/main.css', '/css/options-menu.css', '/css/pwa.css',
@@ -8,12 +8,12 @@ const SHELL = [
   '/js/homepage.js', '/js/fetch-with-retry.js',
   '/js/components/options-menu.js', '/js/components/instagram-account.js',
   '/js/components/input-placeholder.js',
-  '/js/backgrounds/contour-background.js', '/js/backgrounds/wave-background.js',
+  '/js/backgrounds/contour-background.js',
   '/shared/platform-patterns.js', '/shared/video-resolutions.js',
   '/shared/carousel-selection.js', '/shared/instagram-stories.js', '/shared/mp3-qualities.js',
   '/assets/icons/favicon.svg', '/assets/icons/apple-touch-icon.png',
   '/assets/icons/app-192.png', '/assets/icons/app-512.png', '/assets/icons/app-maskable-512.png',
-  '/assets/graphics/contours.svg',
+  '/assets/graphics/contours-fallback.png',
 ];
 
 self.addEventListener('install', event => {

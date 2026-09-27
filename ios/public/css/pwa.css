@@ -1,4 +1,27 @@
-/* The desktop styles remain the source of truth; only device insets differ. */
+/* The shared stylesheet and renderer supply the same opaque desktop black. */
+html.is-ios {
+  color-scheme: dark;
+}
+
+.is-ios .options-control__button {
+  position: relative;
+  width: 32px;
+  height: 32px;
+}
+
+/* The visible circle is compact; its touch target remains 44px across. */
+.is-ios .options-control__button::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+}
+
+.is-ios .options-control__button svg {
+  width: 18px;
+  height: 18px;
+}
+
 @media (display-mode: standalone) {
   .app-container,
   body.has-video .app-container {
