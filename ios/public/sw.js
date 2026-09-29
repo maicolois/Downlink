@@ -1,6 +1,6 @@
 // Bump this version whenever the app shell changes. Updates activate after the
 // existing windows close, so an in-progress download is never forcibly reloaded.
-const CACHE = 'downlink-shell-v5';
+const CACHE = 'downlink-shell-v7';
 const SHELL = [
   '/', '/index.html', '/manifest.webmanifest',
   '/css/main.css', '/css/options-menu.css', '/css/pwa.css',

@@ -3,6 +3,9 @@ import { apiFetch, isNativeApp } from '../platform.js';
 const SESSION_ENDPOINT = '/api/instagram/session';
 const ACCOUNT_ENDPOINT = '/api/instagram/';
 const CONNECTION_SIGNAL = 'instagram-connection-changed';
+const INSTAGRAM_LOGIN_URL = 'https://www.instagram.com/accounts/login/';
+const BRIDGE_REQUEST = 'downlink-instagram-capture';
+const BRIDGE_RESPONSE = 'downlink-instagram-capture-result';
 
 export function initializeInstagramAccount({ onChange } = {}) {
   const button = document.getElementById('instagramAccountButton');
@@ -19,7 +22,10 @@ export function initializeInstagramAccount({ onChange } = {}) {
   const cancelButton = document.getElementById('instagramAccountCancel');
   const disconnectButton = document.getElementById('instagramAccountDisconnect');
 
-  let session = { available: null, connected: false, pending: false, expiresAt: null, csrfToken: '' };
+  let session = {
+    available: null, connected: false, pending: false,
+    expiresAt: null, csrfToken: '', captureToken: '',
+  };
   let loaded = false;
   let busy = false;
   let operation = null;
@@ -28,6 +34,7 @@ export function initializeInstagramAccount({ onChange } = {}) {
   let refreshPromise = null;
   let pollTimer = null;
   let expiryTimer = null;
+  let closeTimer = null;
   let connectionChannel = null;
   let returnFocus = null;
   let closeRequested = false;
@@ -96,12 +103,13 @@ export function initializeInstagramAccount({ onChange } = {}) {
     let status = notice;
     if (!loaded) status = 'Comprobando la conexión…';
     else if (session.available === false) status = 'La conexión está disponible al abrir la aplicación en el equipo donde se ejecuta.';
-    else if (operation === 'login/start') status = isNativeApp() ? 'Abriendo Instagram…' : 'Abriendo una ventana de Instagram…';
+    else if (operation === 'login/start') status = isNativeApp() ? 'Abriendo Instagram…' : 'Abriendo una pestaña de Instagram…';
+    else if (operation === 'login/capture') status = 'Recuperando la sesión desde la pestaña de Instagram…';
     else if (operation === 'login/complete') status = 'Comprobando tu inicio de sesión…';
     else if (operation === 'disconnect') status = 'Desconectando tu cuenta…';
     else if (session.pending) status = isNativeApp()
       ? 'Completa el inicio de sesión en Instagram y confirma la conexión.'
-      : 'Completa el inicio de sesión en la ventana de Instagram, incluidos sus pasos de verificación. Luego vuelve aquí.';
+      : 'Completa el inicio de sesión en Instagram. Al volver a esta pestaña comprobaremos la conexión automáticamente.';
     setText(stateMessage, status);
     stateMessage.hidden = !status;
 
@@ -136,6 +144,7 @@ export function initializeInstagramAccount({ onChange } = {}) {
       pending: value.pending === true && !expired,
       expiresAt: expired ? null : value.expiresAt ?? null,
       csrfToken,
+      captureToken: typeof value.captureToken === 'string' ? value.captureToken : '',
     };
     loaded = true;
     if (wasPending && !session.pending && !session.connected && !operation) {
@@ -273,6 +282,79 @@ export function initializeInstagramAccount({ onChange } = {}) {
     }
   }
 
+  function openInstagramTab() {
+    const loginTab = window.open(INSTAGRAM_LOGIN_URL, '_blank');
+    if (!loginTab) {
+      showError('El navegador ha bloqueado la pestaña de Instagram. Permite las ventanas emergentes para Downlink y vuelve a intentarlo.');
+      return false;
+    }
+    try { loginTab.opener = null; } catch { /* The tab is already isolated by the browser. */ }
+    return true;
+  }
+
+  function captureInstagramSession() {
+    if (!session.captureToken) {
+      return Promise.reject(new Error('La conexión ha caducado. Cancélala y abre Instagram de nuevo.'));
+    }
+    const requestId = globalThis.crypto?.randomUUID?.()
+      ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const endpoint = new URL(`${ACCOUNT_ENDPOINT}login/import`, window.location.href).href;
+    return new Promise((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener('message', onMessage);
+        reject(new Error('No se detectó el puente de Instagram. Instala la extensión local incluida con Downlink y vuelve a confirmar.'));
+      }, 6000);
+      function onMessage(event) {
+        if (event.source !== window || event.origin !== window.location.origin
+            || event.data?.type !== BRIDGE_RESPONSE || event.data?.requestId !== requestId) return;
+        window.clearTimeout(timeout);
+        window.removeEventListener('message', onMessage);
+        if (event.data.ok) resolve();
+        else reject(new Error(event.data.error || 'No se pudo recuperar la sesión de Instagram.'));
+      }
+      window.addEventListener('message', onMessage);
+      window.postMessage({
+        type: BRIDGE_REQUEST, requestId, endpoint, captureToken: session.captureToken,
+      }, window.location.origin);
+    });
+  }
+
+  function startLogin() {
+    if (isNativeApp()) {
+      void mutate('login/start');
+      return;
+    }
+    if (busy || operation || session.pending || !openInstagramTab()) return;
+    void mutate('login/start');
+  }
+
+  async function completeLogin() {
+    if (isNativeApp() || !session.captureToken) {
+      await mutate('login/complete');
+      return;
+    }
+    if (busy || operation) return;
+    operation = 'login/capture';
+    notice = '';
+    showError();
+    render();
+    let captured = false;
+    try {
+      await captureInstagramSession();
+      captured = true;
+    } catch (error) {
+      showError(error.message);
+    } finally {
+      operation = null;
+      render();
+    }
+    if (closeRequested) {
+      if (session.pending) await mutate('login/cancel', { closing: true });
+      return;
+    }
+    if (captured) await mutate('login/complete');
+  }
+
   function restoreFocus() {
     if (dialog.open || operation || !returnFocus) return;
     if (returnFocus instanceof HTMLElement && returnFocus.isConnected && !returnFocus.hasAttribute('disabled')) {
@@ -284,12 +366,27 @@ export function initializeInstagramAccount({ onChange } = {}) {
   function close() {
     closeRequested = true;
     stopPolling();
-    if (dialog.open) dialog.close();
+    if (dialog.open && !dialog.classList.contains('is-closing')) {
+      const finishClose = () => {
+        closeTimer = null;
+        dialog.classList.remove('is-closing');
+        if (dialog.open) dialog.close();
+      };
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
+        finishClose();
+      } else {
+        dialog.classList.add('is-closing');
+        closeTimer = window.setTimeout(finishClose, 160);
+      }
+    }
     if (session.pending && !operation) void mutate('login/cancel', { closing: true });
   }
 
   async function open() {
     if (busy || operation || dialog.open) return;
+    window.clearTimeout(closeTimer);
+    closeTimer = null;
+    dialog.classList.remove('is-closing');
     closeRequested = false;
     const activeControl = document.activeElement;
     const menuButton = document.getElementById('optionsMenuButton');
@@ -305,25 +402,39 @@ export function initializeInstagramAccount({ onChange } = {}) {
 
   button.addEventListener('click', open);
   closeButton.addEventListener('click', close);
-  startButton.addEventListener('click', () => { void mutate('login/start'); });
-  completeButton.addEventListener('click', () => { void mutate('login/complete'); });
+  startButton.addEventListener('click', startLogin);
+  completeButton.addEventListener('click', () => { void completeLogin(); });
   cancelButton.addEventListener('click', () => { void mutate('login/cancel'); });
   disconnectButton.addEventListener('click', () => { void mutate('disconnect'); });
   dialog.addEventListener('cancel', (event) => {
     event.preventDefault();
     close();
   });
+  dialog.addEventListener('click', (event) => {
+    if (event.target !== dialog) return;
+    const bounds = dialog.getBoundingClientRect();
+    const outside = event.clientX < bounds.left || event.clientX > bounds.right
+      || event.clientY < bounds.top || event.clientY > bounds.bottom;
+    if (outside) close();
+  });
   dialog.addEventListener('close', () => {
+    window.clearTimeout(closeTimer);
+    closeTimer = null;
+    dialog.classList.remove('is-closing');
     stopPolling();
     restoreFocus();
   });
 
-  function refreshVisibleSession() {
-    if (document.visibilityState === 'visible') void refresh({ fresh: true });
+  async function refreshVisibleSession() {
+    if (document.visibilityState !== 'visible') return;
+    await refresh({ fresh: true });
+    if (!dialog.open || closeRequested || busy || operation
+        || !session.pending || !session.captureToken) return;
+    await completeLogin();
   }
 
-  window.addEventListener('focus', refreshVisibleSession);
-  document.addEventListener('visibilitychange', refreshVisibleSession);
+  window.addEventListener('focus', () => { void refreshVisibleSession(); });
+  document.addEventListener('visibilitychange', () => { void refreshVisibleSession(); });
   if (typeof BroadcastChannel === 'function') {
     try {
       connectionChannel = new BroadcastChannel(CONNECTION_SIGNAL);

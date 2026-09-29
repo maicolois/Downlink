@@ -497,36 +497,56 @@ body.has-video .home-controls {
 }
 
 .instagram-dialog button:focus-visible {
-  outline: 2px solid #8ec5ff;
-  outline-offset: 4px;
+  outline: 2px solid rgba(255, 255, 255, 0.92);
+  outline-offset: 3px;
 }
 
 .instagram-dialog {
   position: fixed;
-  inset: 0;
-  width: 100vw;
-  max-width: none;
-  height: 100dvh;
-  max-height: none;
-  margin: 0;
+  width: min(680px, calc(100vw - 40px));
+  max-width: 680px;
+  max-height: calc(100dvh - 40px);
+  margin: auto;
   padding: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  border: 0;
-  background: #08090b;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 28px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.025) 42%, rgba(255, 255, 255, 0.06)),
+    rgba(15, 17, 22, 0.82);
   color: #f5f5f7;
   font-family: inherit;
   text-align: left;
   color-scheme: dark;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 34px 90px rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(34px) saturate(165%);
+  -webkit-backdrop-filter: blur(34px) saturate(165%);
 }
 
 .instagram-dialog::backdrop {
-  background: #08090b;
+  background: rgba(3, 4, 7, 0.72);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
 }
 
 .instagram-dialog[open] {
   display: block;
-  animation: instagramDialogIn 0.3s ease-out;
+  animation: instagramDialogIn 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.instagram-dialog[open]::backdrop {
+  animation: instagramBackdropIn 0.24s ease-out;
+}
+
+.instagram-dialog.is-closing {
+  pointer-events: none;
+  animation: instagramDialogOut 0.16s ease-in both;
+}
+
+.instagram-dialog.is-closing::backdrop {
+  animation: instagramBackdropOut 0.16s ease-in both;
 }
 
 body:has(.instagram-dialog[open]) {
@@ -534,106 +554,117 @@ body:has(.instagram-dialog[open]) {
 }
 
 .instagram-dialog__glow {
-  position: fixed;
-  inset: 0;
+  position: absolute;
+  inset: -1px;
   background:
-    radial-gradient(circle at 52% 15%, rgba(214, 73, 137, 0.12), transparent 29%),
-    radial-gradient(circle at 16% 82%, rgba(94, 67, 181, 0.1), transparent 34%);
+    radial-gradient(circle at 5% 0%, rgba(214, 73, 137, 0.18), transparent 33%),
+    radial-gradient(circle at 100% 92%, rgba(73, 112, 214, 0.1), transparent 36%);
   pointer-events: none;
 }
 
 .instagram-dialog__page {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: min(980px, 100%);
-  min-height: 100%;
-  margin: 0 auto;
-  padding: clamp(36px, 6vh, 76px) clamp(18px, 6vw, 72px);
+  max-height: calc(100dvh - 40px);
+  padding: clamp(28px, 5vw, 42px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-.instagram-dialog__brand {
-  margin: 0 0 clamp(42px, 8vh, 76px);
-  color: #f5f5f7;
-  font-family: "Spicy Rice", Georgia, serif;
-  font-size: clamp(1.9rem, 5vw, 2.8rem);
-  font-weight: 400;
-  font-synthesis: none;
-  line-height: 0.82;
-  letter-spacing: -0.045em;
-  text-transform: uppercase;
+.instagram-dialog__page::-webkit-scrollbar {
+  width: 10px;
+}
+
+.instagram-dialog__page::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.2);
+  background-clip: padding-box;
 }
 
 .instagram-dialog__content {
   position: relative;
   width: 100%;
-  max-width: 720px;
+  padding-top: 4px;
 }
 
-.instagram-dialog__back {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0 0 28px -7px;
-  padding: 7px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #9b9ba4;
-  font: inherit;
-  font-size: 0.8rem;
+.instagram-dialog__close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #aaaab3;
   cursor: pointer;
+  transition: color 180ms ease, background 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
 
-.instagram-dialog__back:hover {
+.instagram-dialog__close:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.11);
   color: #fff;
 }
 
-.instagram-dialog__back svg {
-  width: 19px;
-  height: 19px;
+.instagram-dialog__close:active {
+  transform: scale(0.95);
+}
+
+.instagram-dialog__close svg {
+  width: 17px;
+  height: 17px;
 }
 
 .instagram-dialog__heading {
   display: grid;
-  grid-template-columns: 78px minmax(0, 1fr);
-  align-items: start;
-  gap: 25px;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+  padding-right: 40px;
 }
 
 .instagram-dialog__mark {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 78px;
-  height: 78px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 22px;
+  width: 64px;
+  height: 64px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 19px;
   background:
-    radial-gradient(circle at 32% 100%, rgba(255, 206, 88, 0.19), transparent 45%),
-    linear-gradient(145deg, rgba(198, 58, 128, 0.2), rgba(92, 64, 170, 0.11));
-  color: #f0d9e8;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    radial-gradient(circle at 26% 108%, rgba(255, 194, 77, 0.44), transparent 48%),
+    linear-gradient(145deg, rgba(220, 58, 132, 0.7), rgba(92, 64, 170, 0.52));
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    0 12px 30px rgba(154, 48, 119, 0.2);
 }
 
 .instagram-dialog__mark svg {
-  width: 38px;
-  height: 38px;
+  width: 31px;
+  height: 31px;
 }
 
 .instagram-dialog__eyebrow {
-  margin: 0 0 7px;
-  color: #92929d;
-  font-size: 0.74rem;
+  margin: 0 0 6px;
+  color: #a3a3ad;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
 }
 
 .instagram-dialog__title {
-  margin: 0 0 12px;
-  font-size: clamp(2rem, 5.4vw, 4rem);
-  font-weight: 400;
-  line-height: 1.05;
-  letter-spacing: -0.04em;
+  margin: 0;
+  font-size: clamp(1.65rem, 4vw, 2.25rem);
+  font-weight: 550;
+  line-height: 1.08;
+  letter-spacing: -0.045em;
 }
 
 .instagram-dialog__title:focus {
@@ -641,21 +672,23 @@ body:has(.instagram-dialog[open]) {
 }
 
 .instagram-dialog__description {
-  margin: 0;
-  color: #a7a7b0;
-  font-size: clamp(0.86rem, 1.5vw, 1rem);
+  grid-column: 1 / -1;
+  margin: 22px 0 0;
+  color: #a7a7b1;
+  font-size: 0.9rem;
   line-height: 1.65;
 }
 
 .instagram-dialog__connection {
   display: flex;
   align-items: center;
-  gap: 15px;
-  margin-top: clamp(30px, 5vh, 44px);
-  padding: 17px 19px;
+  gap: 14px;
+  margin-top: 24px;
+  padding: 16px 17px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.035);
+  border-radius: 17px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.025));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 
 .instagram-dialog__connection > span:last-child {
@@ -664,14 +697,17 @@ body:has(.instagram-dialog[open]) {
 }
 
 .instagram-dialog__connection small {
-  color: #85858e;
-  font-size: 0.71rem;
+  color: #898993;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
 }
 
 .instagram-dialog__connection strong {
-  color: #d7d7dc;
-  font-size: 0.88rem;
-  font-weight: 500;
+  color: #dddde2;
+  font-size: 0.9rem;
+  font-weight: 550;
 }
 
 .instagram-dialog__connection-dot {
@@ -680,7 +716,7 @@ body:has(.instagram-dialog[open]) {
   height: 11px;
   border-radius: 50%;
   background: #686870;
-  box-shadow: 0 0 0 5px rgba(104, 104, 112, 0.12);
+  box-shadow: 0 0 0 5px rgba(104, 104, 112, 0.14);
 }
 
 .instagram-dialog[data-connection-state="connected"] .instagram-dialog__connection-dot {
@@ -698,73 +734,91 @@ body:has(.instagram-dialog[open]) {
   box-shadow: 0 0 0 5px rgba(231, 189, 105, 0.12);
 }
 
-.instagram-dialog[data-connection-state="error"] .instagram-dialog__connection-dot {
+.instagram-dialog[data-connection-state="loading"] .instagram-dialog__connection-dot {
+  animation: instagramStatusPulse 1.35s ease-in-out infinite;
+}
+
+.instagram-dialog[data-connection-state="error"] .instagram-dialog__connection-dot,
+.instagram-dialog[data-connection-state="unavailable"] .instagram-dialog__connection-dot {
   background: #de747c;
   box-shadow: 0 0 0 5px rgba(222, 116, 124, 0.12);
 }
 
-.instagram-dialog[data-connection-state="error"] .instagram-dialog__connection strong {
+.instagram-dialog[data-connection-state="error"] .instagram-dialog__connection strong,
+.instagram-dialog[data-connection-state="unavailable"] .instagram-dialog__connection strong {
   color: #efa0a6;
 }
 
 .instagram-dialog__state,
 .instagram-dialog__error {
-  margin: 18px 0 0;
-  padding: 13px 14px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.035);
   color: #d2d2d9;
-  font-size: 0.81rem;
+  font-size: 0.78rem;
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
 
 .instagram-dialog__error {
+  border-color: rgba(255, 95, 104, 0.13);
   background: rgba(255, 95, 104, 0.08);
   color: #ffafb5;
 }
 
 .instagram-dialog__actions {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  width: min(100%, 360px);
-  margin-top: 25px;
+  width: 100%;
+  margin-top: 20px;
 }
 
 .instagram-dialog__button {
   display: block;
   width: 100%;
-  min-height: 44px;
-  padding: 11px 18px;
+  min-height: 48px;
+  padding: 12px 18px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-pill);
-  background: transparent;
-  color: #ccccd4;
+  background: rgba(255, 255, 255, 0.035);
+  color: #d5d5dc;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.86rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 0.18s ease, opacity 0.18s ease;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
 }
 
 .instagram-dialog__button:hover {
-  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
 }
 
 .instagram-dialog__button--primary {
+  grid-column: 1 / -1;
   border-color: transparent;
-  background: #efeff4;
-  color: #18181b;
-  font-weight: 500;
+  background: #f5f5f7;
+  color: #101114;
+  font-weight: 600;
 }
 
 .instagram-dialog__button--primary:hover {
   background: #fff;
+  box-shadow: 0 10px 24px rgba(255, 255, 255, 0.11);
 }
 
 .instagram-dialog__button--danger {
+  grid-column: 1 / -1;
   border-color: rgba(255, 103, 112, 0.22);
   color: #ffadb3;
+}
+
+#instagramAccountCancel {
+  grid-column: 1 / -1;
 }
 
 .instagram-dialog__button--danger:hover {
@@ -774,14 +828,32 @@ body:has(.instagram-dialog[open]) {
 .instagram-dialog__button:disabled {
   opacity: 0.45;
   cursor: default;
+  transform: none;
 }
 
 .instagram-dialog__privacy {
-  max-width: 480px;
-  margin: 17px 0 0;
-  color: #81818d;
-  font-size: 0.73rem;
-  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 20px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+  color: #85858f;
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.instagram-dialog__privacy svg {
+  flex: 0 0 17px;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  color: #8dd9b2;
+}
+
+.instagram-dialog__privacy strong {
+  color: #a9a9b1;
+  font-weight: 550;
 }
 
 .instagram-dialog [hidden] {
@@ -789,69 +861,116 @@ body:has(.instagram-dialog[open]) {
 }
 
 @keyframes instagramDialogIn {
-  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  from { opacity: 0; transform: translateY(7px) scale(0.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes instagramDialogOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(4px) scale(0.99); }
+}
+
+@keyframes instagramBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes instagramBackdropOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes instagramStatusPulse {
+  50% { box-shadow: 0 0 0 7px rgba(231, 189, 105, 0.04); }
+}
+
 @media (max-width: 600px) {
-  .instagram-dialog__page {
-    justify-content: flex-start;
-    padding-top: max(32px, env(safe-area-inset-top));
-    padding-bottom: max(32px, env(safe-area-inset-bottom));
+  .instagram-dialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+    border-radius: 24px;
   }
 
-  .instagram-dialog__brand {
-    margin-bottom: clamp(46px, 10vh, 72px);
+  .instagram-dialog__page {
+    max-height: calc(100dvh - 20px);
+    padding: 27px 20px 22px;
+  }
+
+  .instagram-dialog__close {
+    top: 16px;
+    right: 16px;
   }
 
   .instagram-dialog__heading {
-    grid-template-columns: 64px minmax(0, 1fr);
-    gap: 18px;
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 15px;
+    padding-right: 30px;
   }
 
   .instagram-dialog__mark {
-    width: 64px;
-    height: 64px;
-    border-radius: 18px;
-  }
-
-  .instagram-dialog__mark svg {
-    width: 31px;
-    height: 31px;
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
   }
 
   .instagram-dialog__title {
-    font-size: clamp(2rem, 10vw, 2.8rem);
+    font-size: clamp(1.5rem, 7vw, 1.9rem);
   }
 
-  .instagram-dialog__actions {
-    width: 100%;
+  .instagram-dialog__description {
+    margin-top: 19px;
+    font-size: 0.84rem;
   }
 }
 
 @media (max-width: 420px) {
-  .instagram-dialog__heading {
+  .instagram-dialog__actions {
     grid-template-columns: 1fr;
+  }
+
+  .instagram-dialog__button--primary {
+    grid-column: auto;
   }
 }
 
 @media (max-height: 700px) {
   .instagram-dialog__page {
-    justify-content: flex-start;
-    padding-top: max(24px, env(safe-area-inset-top));
-    padding-bottom: max(24px, env(safe-area-inset-bottom));
-  }
-
-  .instagram-dialog__brand {
-    margin-bottom: 30px;
-  }
-
-  .instagram-dialog__back {
-    margin-bottom: 18px;
+    padding-block: 22px 18px;
   }
 
   .instagram-dialog__connection {
-    margin-top: 24px;
+    margin-top: 14px;
+  }
+
+  .instagram-dialog__description {
+    margin-top: 13px;
+  }
+
+  .instagram-dialog__state,
+  .instagram-dialog__error {
+    margin-top: 10px;
+  }
+
+  .instagram-dialog__actions {
+    margin-top: 14px;
+  }
+
+  .instagram-dialog__privacy {
+    margin-top: 14px;
+    padding-top: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .instagram-dialog[open],
+  .instagram-dialog[open]::backdrop,
+  .instagram-dialog[data-connection-state="loading"] .instagram-dialog__connection-dot {
+    animation: none;
+  }
+
+  .instagram-dialog__button,
+  .instagram-dialog__close {
+    transition: none;
   }
 }
 

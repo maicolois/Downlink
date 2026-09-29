@@ -145,6 +145,34 @@ test('local sign-in reads the new browser only on confirmation and keeps connect
   });
 });
 
+test('browser extension imports an explicitly confirmed Instagram tab without launching another browser', async t => {
+  const f = await fixture(t, { launchLogin: null });
+  const user = f.client();
+  await user.status();
+  const started = await user.start();
+  assert.equal(started.body.pending, true);
+  assert.match(started.body.captureToken, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(f.handles.length, 0);
+  assert.equal((await user.status()).body.captureToken, started.body.captureToken);
+
+  const imported = await fetch(`${f.origin}/api/instagram/login/import`, {
+    method: 'POST',
+    headers: {
+      Origin: `chrome-extension://${'a'.repeat(32)}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ captureToken: started.body.captureToken, cookies: [cookie('extension-session')] }),
+  });
+  assert.equal(imported.status, 200);
+  assert.deepEqual(await imported.json(), { imported: true });
+
+  const complete = await user.complete();
+  assert.equal(complete.body.connected, true);
+  assert.equal(complete.body.pending, false);
+  assert.equal(JSON.stringify(complete.body).includes('extension-session'), false);
+  assert.equal('captureToken' in complete.body, false);
+});
+
 test('incomplete, unrelated, malformed, or expired login cookies never connect an account', async t => {
   const f = await fixture(t);
   const user = f.client();

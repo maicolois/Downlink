@@ -23,7 +23,7 @@ test('connected accounts isolate metadata, private downloads and revocation thro
   const child = spawn(process.execPath, ['--import', './tests/fixtures/instagram-login.mjs', 'server/index.js'], {
     cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, PORT: String(port), YT_DLP_PATH: 'instagram-story-test-extractor',
-      INSTAGRAM_COOKIES_FILE: '', STORY_FIXTURE_LOG: logPath },
+      INSTAGRAM_COOKIES_FILE: '', INSTAGRAM_LOGIN_MODE: 'isolated-browser', STORY_FIXTURE_LOG: logPath },
   });
   let logs = '';
   child.stdout.on('data', chunk => { logs += chunk; });

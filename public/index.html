@@ -398,13 +398,11 @@
   <dialog id="instagramAccountDialog" class="instagram-dialog" aria-labelledby="instagramAccountTitle" aria-describedby="instagramAccountDescription">
     <div class="instagram-dialog__glow" aria-hidden="true"></div>
     <div class="instagram-dialog__page">
-      <p class="instagram-dialog__brand">down<span class="brand-link">link</span></p>
-      <section class="instagram-dialog__content">
-        <button id="instagramAccountClose" class="instagram-dialog__back" type="button">
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          Volver
-        </button>
+      <button id="instagramAccountClose" class="instagram-dialog__close" type="button" aria-label="Cerrar">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
 
+      <section class="instagram-dialog__content">
         <div class="instagram-dialog__heading">
           <div class="instagram-dialog__mark" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
@@ -432,11 +430,18 @@
         <p id="instagramAccountError" class="instagram-dialog__error" role="alert" hidden></p>
         <div id="instagramAccountActions" class="instagram-dialog__actions">
           <button id="instagramAccountStart" class="instagram-dialog__button instagram-dialog__button--primary" type="button">Abrir Instagram</button>
-          <button id="instagramAccountComplete" class="instagram-dialog__button instagram-dialog__button--primary" type="button" hidden>Ya he iniciado sesión</button>
+          <button id="instagramAccountComplete" class="instagram-dialog__button instagram-dialog__button--primary" type="button" hidden>Comprobar ahora</button>
           <button id="instagramAccountCancel" class="instagram-dialog__button" type="button" hidden>Cancelar</button>
           <button id="instagramAccountDisconnect" class="instagram-dialog__button instagram-dialog__button--danger" type="button" hidden>Desconectar cuenta</button>
         </div>
-        <p id="instagramAccountPrivacy" class="instagram-dialog__privacy">Las stories privadas deben ser visibles para tu cuenta.</p>
+
+        <div id="instagramAccountPrivacy" class="instagram-dialog__privacy">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3 5 6v5c0 4.6 2.8 8.7 7 10 4.2-1.3 7-5.4 7-10V6l-7-3Z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+          <span><strong>Sesión temporal y privada.</strong> Las stories privadas deben ser visibles para tu cuenta.</span>
+        </div>
       </section>
     </div>
   </dialog>

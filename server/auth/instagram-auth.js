@@ -115,7 +115,8 @@ async function launchInstagramLogin({ signal }) {
  * notifyRevoke receives the same public { ownerId, key, expiresAt } as getContext.
  */
 export function createInstagramAuth({
-  launchLogin = launchInstagramLogin, now = Date.now, notifyRevoke = () => {},
+  launchLogin = process.env.INSTAGRAM_LOGIN_MODE === 'isolated-browser' ? launchInstagramLogin : null,
+  now = Date.now, notifyRevoke = () => {},
   sessionTtlMs = EIGHT_HOURS, loginTtlMs = FIVE_MINUTES, cleanupIntervalMs = 30_000,
 } = {}) {
   const sessions = new Map();
@@ -218,6 +219,7 @@ export function createInstagramAuth({
       available: !disposed && sameOrigin(req), connected: Boolean(session?.connection),
       pending: Boolean(session?.pending), expiresAt: session?.connection?.expiresAt ?? null,
       csrfToken: session?.csrfToken ?? null,
+      ...(session?.pending?.captureToken ? { captureToken: session.pending.captureToken } : {}),
     };
   }
 
@@ -244,6 +246,10 @@ export function createInstagramAuth({
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
     if (req.method === 'GET' && req.path === '/session') return next();
+    const extensionImport = req.method === 'POST' && req.path === '/login/import'
+      && Boolean(localOrigin(req))
+      && /^chrome-extension:\/\/[a-p]{32}$/i.test(String(req.headers.origin || ''));
+    if (extensionImport) return next();
     if (disposed || !sameOrigin(req, { requireOrigin: true })) {
       return res.status(403).json({ error: 'Conecta Instagram desde localhost en el ordenador donde ejecutas la aplicación.', code: 'INSTAGRAM_LOCAL_ONLY' });
     }
@@ -262,8 +268,12 @@ export function createInstagramAuth({
   router.post('/login/start', async (req, res) => {
     const session = getSession(req);
     if (session.pending) return sendState(req, res, session);
-    const pending = { controller: new AbortController(), expiresAt: now() + loginLifetime, handle: null, completing: false };
+    const pending = {
+      controller: new AbortController(), expiresAt: now() + loginLifetime,
+      handle: null, completing: false, captureToken: launchLogin ? null : token(), importedCookies: null,
+    };
     session.pending = pending;
+    if (!launchLogin) return sendState(req, res, session);
     const launch = Promise.resolve().then(() => launchLogin({ signal: pending.controller.signal }));
     launches.add(launch);
     try {
@@ -290,16 +300,45 @@ export function createInstagramAuth({
     }
   });
 
+  router.post('/login/import', (req, res) => {
+    const captureToken = typeof req.body?.captureToken === 'string' ? req.body.captureToken : '';
+    if (!/^[A-Za-z0-9_-]{43}$/.test(captureToken)) {
+      return res.status(403).json({ error: 'La solicitud de conexión no es válida.', code: 'INSTAGRAM_CAPTURE_INVALID' });
+    }
+    let matchedSession = null;
+    for (const candidate of sessions.values()) {
+      if (!cleanSession(candidate) || !candidate.pending?.captureToken) continue;
+      if (timingSafeEqual(Buffer.from(captureToken), Buffer.from(candidate.pending.captureToken))) {
+        matchedSession = candidate;
+        break;
+      }
+    }
+    if (!matchedSession) {
+      return res.status(409).json({ error: 'La conexión se ha cancelado o ha caducado.', code: 'INSTAGRAM_LOGIN_CANCELLED' });
+    }
+    const cookies = instagramCookies(req.body?.cookies, now());
+    if (!cookies.some(cookie => cookie.name === 'sessionid' && cookie.value)) {
+      return res.status(409).json({
+        error: 'Termina de iniciar sesión en Instagram, incluida la verificación si aparece, y vuelve a confirmar.',
+        code: 'INSTAGRAM_LOGIN_INCOMPLETE',
+      });
+    }
+    matchedSession.pending.importedCookies = cookies;
+    res.json({ imported: true });
+  });
+
   router.post('/login/complete', async (req, res) => {
     const session = getSession(req);
     const pending = session.pending;
-    if (!pending?.handle || pending.completing) {
+    if ((!pending?.handle && !pending?.importedCookies) || pending.completing) {
       return res.status(409).json({ error: 'Abre Instagram e inicia sesión antes de confirmar.', code: 'INSTAGRAM_LOGIN_NOT_READY' });
     }
     pending.completing = true;
     try {
-      // Only this explicit user action reads the session created in our new browser.
-      const cookies = instagramCookies(await pending.handle.context.cookies('https://www.instagram.com/'), now());
+      // Only this explicit user action reads or accepts the session from the login tab.
+      const cookies = pending.handle
+        ? instagramCookies(await pending.handle.context.cookies('https://www.instagram.com/'), now())
+        : pending.importedCookies;
       if (!cleanSession(session) || session.pending !== pending) {
         return res.status(409).json({ error: 'La conexión se ha cancelado o ha caducado.', code: 'INSTAGRAM_LOGIN_CANCELLED' });
       }

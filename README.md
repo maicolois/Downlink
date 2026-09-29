@@ -68,11 +68,12 @@ Se muestran **stories en vídeo**; las fotografías no se convierten. Las storie
 
 ### Conectar Instagram en este equipo
 
-1. Abre la aplicación en `http://localhost:3000` en el mismo ordenador donde ejecutas el servidor. Ten instalado Google Chrome o Microsoft Edge.
-2. Abre el botón de tres puntos de la esquina superior derecha, entra en **Conectar Instagram** y pulsa **Abrir Instagram**.
-3. Completa el inicio de sesión y cualquier verificación directamente en la ventana de `instagram.com`. Esa ventana utiliza una sesión nueva, separada de tu navegador habitual.
-4. Vuelve al conversor y pulsa **Ya he iniciado sesión**. Mantén abierta la ventana de Instagram hasta confirmar.
-5. Pega una story, un perfil o `@usuario`. Si ya había un enlace de Instagram en el campo, se vuelve a analizar al conectar.
+1. Instala una vez el [puente local de Instagram](browser-extension/instagram-bridge/README.md) en Chrome o Edge y recarga Downlink.
+2. Abre la aplicación en `http://localhost:3000` en ese mismo navegador.
+3. Abre el botón de tres puntos de la esquina superior derecha, entra en **Conectar Instagram** y pulsa **Abrir Instagram**.
+4. Completa el inicio de sesión y cualquier verificación en la nueva pestaña de `instagram.com`.
+5. Vuelve a la pestaña de Downlink. La conexión se comprobará automáticamente; **Comprobar ahora** queda como alternativa manual.
+6. Pega una story, un perfil o `@usuario`. Si ya había un enlace de Instagram en el campo, se vuelve a analizar al conectar.
 
 La cuenta conectada permite intentar la descarga de los vídeos que **esa cuenta pueda ver**, incluidas las stories privadas para las que tenga autorización. No concede acceso a otras cuentas privadas, stories caducadas o contenido retirado. La extracción todavía depende del soporte de yt-dlp y de la respuesta de Instagram; conectar una sesión no garantiza que todos los enlaces funcionen.
 
@@ -82,13 +83,13 @@ Esta conexión está diseñada para **uso local**. No abre el navegador de un vi
 
 La conexión dura como máximo **8 horas**, o menos si caduca la sesión de Instagram, y termina al reiniciar el servidor. Para retirarla, abre **Conectar Instagram** desde el menú de tres puntos y pulsa **Desconectar cuenta**. Se elimina su acceso en esta aplicación; esto no equivale a revocar todas las sesiones de la cuenta en Instagram.
 
-La aplicación no recibe tu contraseña ni tus códigos de verificación. Tras tu confirmación, conserva en memoria únicamente las cookies de Instagram de la ventana que ha abierto. Para cada extracción crea un archivo temporal independiente y lo elimina al terminar. No importa el perfil habitual ni guarda capturas o grabaciones del inicio de sesión.
+La aplicación no recibe tu contraseña ni tus códigos de verificación. El puente solo lee las cookies de `instagram.com` al volver a Downlink durante una conexión iniciada y las entrega al servidor local mediante un token temporal. Downlink conserva esa sesión únicamente en memoria; para cada extracción crea un archivo temporal independiente y lo elimina al terminar. No guarda capturas ni grabaciones del inicio de sesión.
 
 Cada navegador tiene su propia conexión. Los resultados autenticados no entran en la caché compartida; los trabajos y archivos quedan vinculados a su conexión. Al desconectar, se interrumpen las descargas de esa conexión y se eliminan sus archivos. Las pestañas sincronizan cambios de cuenta y caducidad sin transmitirse credenciales.
 
 El servidor web ya no aplica `INSTAGRAM_COOKIES_FILE` globalmente: una cuenta del servidor no debe compartirse con todos los visitantes. Utiliza el botón de conexión de cada navegador.
 
-Referencias: [cookies de yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp), [extractor de Instagram](https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/yt_dlp/extractor/instagram.py#L648-L706) y [contextos aislados de Playwright](https://playwright.dev/docs/browser-contexts).
+Referencias: [cookies de yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp) y [extractor de Instagram](https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/yt_dlp/extractor/instagram.py#L648-L706).
 
 ## Pruebas
 

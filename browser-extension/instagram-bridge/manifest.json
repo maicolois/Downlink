@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Downlink · Instagram",
+  "version": "1.0.0",
+  "description": "Conecta una pestaña de Instagram con la aplicación local Downlink.",
+  "permissions": [
+    "cookies"
+  ],
+  "host_permissions": [
+    "https://instagram.com/*",
+    "https://*.instagram.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import './instagram-extractor.mjs';
 import { chromium } from 'playwright-core';
 
 let sequence = 0;
-// No browser is launched and no network calls or existing profiles are used.
+// Keep the legacy isolated-browser path under test without launching a real browser.
 chromium.launch = async () => {
   const account = `fixture-account-${++sequence}`;
   let connected = true;
