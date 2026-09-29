@@ -1,5 +1,4 @@
 import express from 'express';
-import { mountIosAssets } from '../ios/server.js';
 import cors from 'cors';
 import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
@@ -195,7 +194,6 @@ app.use(express.json());
 app.use('/api', instagramAuth.middleware);
 app.use('/api/instagram', instagramAuth.router);
 app.use(cors());
-mountIosAssets(app);
 app.use(express.static(path.join(PROJECT_ROOT, 'public'), {
   setHeaders(res, filePath) {
     if (path.basename(filePath) === 'index.html') {

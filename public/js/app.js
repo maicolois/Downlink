@@ -7,8 +7,7 @@ import { initializeInputPlaceholder } from './components/input-placeholder.js';
 import { initializeInstagramAccount } from './components/instagram-account.js';
 import { initializeOptionsMenu } from './components/options-menu.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
-import { apiFetch, isNativeApp, isIOSWebApp, readClipboard, saveDownload } from './platform.js';
-import { initializePwa } from './pwa.js';
+import { apiFetch, isNativeApp, isIOSBrowser, readClipboard, saveDownload } from './platform.js';
 import { createDownloadSession } from './download-session.js';
 import { MP3_QUALITIES } from '/shared/mp3-qualities.js';
 
@@ -913,7 +912,7 @@ async function downloadFile() {
     progressPercent.textContent = '100%';
     cancelDownloadBtn.hidden = true;
     const filename = status.filename || `download.${status.format}`;
-    const manualSave = !isNativeApp() && (isIOSWebApp() || Boolean(resume));
+    const manualSave = !isNativeApp() && (isIOSBrowser() || Boolean(resume));
     const saved = manualSave ? null : await saveDownload(jobId, filename);
     if (manualSave) preparedDownload = { jobId, filename, format: status.format };
     else downloadSession.clear(jobId);
@@ -1137,7 +1136,6 @@ cancelDownloadBtn.addEventListener('click', cancelDownload);
 
 // Initialize with the same resting appearance as the content view.
 initializeOptionsMenu();
-initializePwa();
 initializeHomepage();
 syncBackgroundState();
 void restoreDownload();

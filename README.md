@@ -2,11 +2,13 @@
 
 Conversor de YouTube, X, Instagram, TikTok, Reddit y Twitch a MP4 y MP3.
 
-## iPhone y iPad · Instalar desde Safari
+## Aplicación nativa para iPhone y iPad
 
-La misma interfaz de escritorio está preparada como una PWA: icono en el inicio, apertura como app y recuperación de descargas al reabrir. No requiere publicar Downlink en la App Store. Las conversiones siguen ejecutándose en el ordenador o servidor.
+La versión iOS es una aplicación SwiftUI autónoma. Incluye CPython, `yt-dlp`, WebKit como motor JavaScript y FFmpeg, por lo que descarga y convierte directamente en el iPhone sin arrancar Node ni depender de un servidor propio.
 
-Proyecto iOS: [`ios/`](ios/). **[Arranque, HTTPS e instalación](ios/README.md).** Incluye una opción de acceso privado con tu ordenador y las limitaciones del guardado y de Instagram.
+- Proyecto nativo: [`ios/`](ios/).
+- **Preparación del Mac, firma e instalación:** [`ios/README.md`](ios/README.md).
+- Los archivos terminados aparecen en `En mi iPhone/DOWNLINK/Downloads`.
 
 ## Aplicación Android · POCO X7 Pro
 
@@ -36,7 +38,7 @@ public/
   assets/       # Iconos y recursos gráficos públicos
   css/          # Estilos de la interfaz
   js/           # Código del navegador, separado por componentes y fondos
-ios/            # PWA para iPhone/iPad: instalación, iconos, recursos y pruebas
+ios/            # App nativa SwiftUI para iPhone/iPad y motor local de descargas
 references/
   backgrounds/  # Vídeos usados como referencia visual; no se sirven al navegador
 server/
@@ -51,7 +53,7 @@ Los directorios `bin/` y `downloads/` se crean durante la ejecución y no se inc
 
 ## Menú de opciones
 
-La web se abre directamente en el conversor. El botón de tres puntos con efecto Liquid Glass, en la esquina superior derecha, contiene únicamente **Conectar Instagram**. El diseño y el menú son los mismos en escritorio y en la PWA de iOS.
+La web se abre directamente en el conversor. El botón de tres puntos con efecto Liquid Glass, en la esquina superior derecha, contiene **Conectar Instagram**. La aplicación nativa iOS reproduce el mismo lenguaje visual y añade el acceso local a **Descargas**.
 
 ## Stories de Instagram
 
@@ -95,6 +97,7 @@ Referencias: [cookies de yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-d
 
 ```powershell
 npm test
+npm run test:ios
 ```
 
 Las pruebas de stories y conexión usan datos simulados y no necesitan una cuenta de Instagram. Cubren sesión, confirmación explícita, CSRF, origen local, separación de cuentas, descargas privadas, caducidad y limpieza. Una descarga real requiere iniciar sesión manualmente y disponer de acceso al contenido.

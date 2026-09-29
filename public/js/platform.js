@@ -1,8 +1,7 @@
-// Desktop and the Safari-installed app use the same HTTP API.
-// Keep the optional native bridge for separately packaged clients.
+// Browsers use the HTTP API. Keep the optional bridge for separately packaged clients.
 export const isNativeApp = () => Boolean(globalThis.DownlinkNative);
 
-export const isIOSWebApp = () => !isNativeApp() && (
+export const isIOSBrowser = () => !isNativeApp() && (
   /iPad|iPhone|iPod/.test(navigator.userAgent)
   || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 );
@@ -24,8 +23,8 @@ export async function saveDownload(jobId, filename) {
   const link = document.createElement('a');
   link.href = `/api/file/${encodeURIComponent(jobId)}`;
   link.download = filename;
-  if (isIOSWebApp()) {
-    // Hand the file to Safari without replacing the installed application's UI.
+  if (isIOSBrowser()) {
+    // Let Safari own the download without replacing the converter page.
     link.target = '_blank';
     link.rel = 'noopener';
   }

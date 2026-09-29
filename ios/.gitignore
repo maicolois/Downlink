@@ -1,0 +1,11 @@
+Downlink.xcodeproj/
+Vendor/
+python-packages/
+Resources/Fonts/*.ttf
+Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
+DerivedData/
+build/
+*.xcarchive
+*.ipa
+__pycache__/
+*.pyc
