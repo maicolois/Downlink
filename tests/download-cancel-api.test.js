@@ -17,7 +17,11 @@ test('YouTube and Twitch report download details and cancellation removes partia
   const port = socket.address().port;
   await new Promise(resolve => socket.close(resolve));
   const base = `http://127.0.0.1:${port}`;
-  const child = spawn(process.execPath, ['--import', './tests/fixtures/cancellable-download.mjs', 'server/index.js'], {
+  const child = spawn(process.execPath, [
+    '--import', './scripts/register-aliases.mjs',
+    '--import', './tests/fixtures/cancellable-download.mjs',
+    'server/index.js',
+  ], {
     cwd: root,
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],

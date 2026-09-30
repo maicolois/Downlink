@@ -1,7 +1,7 @@
 import {
   getDisplayResolution,
   getVideoResolutionLabel,
-} from '../../../shared/video-resolutions.js';
+} from '@/shared/video-resolutions.js';
 
 function mergePlaylistEntry(entry, parent, fallbackIndex) {
   const { entries: _parentEntries, ...parentInfo } = parent;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchWithRetry } from '../public/js/fetch-with-retry.js';
+import { fetchWithRetry } from '@/public/js/fetch-with-retry.js';
 
 test('retries the first transient fetch failure once', async () => {
   const response = { ok: true };

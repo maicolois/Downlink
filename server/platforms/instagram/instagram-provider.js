@@ -1,8 +1,8 @@
-import { PlatformProvider } from '../common/platform-provider.js';
-import { INSTAGRAM_URL_PATTERNS } from '../../../shared/platform-patterns.js';
-import { getInstagramStorySource, isValidInstagramStoryVideoId } from '../../../shared/instagram-stories.js';
-import { enrichInstagramViewCounts } from './instagram-view-count.js';
-import { getInstagramCookieArgs } from './instagram-cookies.js';
+import { PlatformProvider } from '@/server/platforms/common/platform-provider.js';
+import { INSTAGRAM_URL_PATTERNS } from '@/shared/platform-patterns.js';
+import { getInstagramStorySource, isValidInstagramStoryVideoId } from '@/shared/instagram-stories.js';
+import { enrichInstagramViewCounts } from '@/server/platforms/instagram/instagram-view-count.js';
+import { getInstagramCookieArgs } from '@/server/platforms/instagram/instagram-cookies.js';
 
 export class InstagramProvider extends PlatformProvider {
   constructor({ cookiesFile = process.env.INSTAGRAM_COOKIES_FILE } = {}) {

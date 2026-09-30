@@ -19,7 +19,11 @@ test('stories API analyzes, downloads the selected ID and reports access/expiry 
   await once(socket, 'listening');
   const port = socket.address().port;
   await new Promise(resolve => socket.close(resolve));
-  const child = spawn(process.execPath, ['--import', './tests/fixtures/instagram-extractor.mjs', 'server/index.js'], {
+  const child = spawn(process.execPath, [
+    '--import', './scripts/register-aliases.mjs',
+    '--import', './tests/fixtures/instagram-extractor.mjs',
+    'server/index.js',
+  ], {
     cwd: root, windowsHide: true,
     env: { ...process.env, PORT: String(port), YT_DLP_PATH: 'instagram-story-test-extractor',
       INSTAGRAM_COOKIES_FILE: '', STORY_FIXTURE_LOG: logPath },

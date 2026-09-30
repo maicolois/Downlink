@@ -1,4 +1,4 @@
-import './instagram-extractor.mjs';
+import '@/tests/fixtures/instagram-extractor.mjs';
 import { chromium } from 'playwright-core';
 
 let sequence = 0;

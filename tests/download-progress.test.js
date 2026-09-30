@@ -9,7 +9,7 @@ import {
   parseFfmpegOutTime,
   parseYtDlpProgress,
   YT_DLP_PROGRESS_ARGS
-} from '../server/services/download-progress.js';
+} from '@/server/services/download-progress.js';
 
 test('formats technical download speeds with familiar decimal units', () => {
   assert.equal(formatDownloadSpeed('17.03MiB/s'), '17,9 MB/s');

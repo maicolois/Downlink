@@ -1,16 +1,17 @@
-import { SUPPORTED_PLATFORM_PATTERNS, INSTAGRAM_URL_PATTERNS } from '/shared/platform-patterns.js';
-import { getVideoResolutionDescription } from '/shared/video-resolutions.js';
-import { getInitialCarouselVideoIndex } from '/shared/carousel-selection.js';
-import { getInstagramStorySource } from '/shared/instagram-stories.js';
-import { initializeHomepage } from './homepage.js';
-import { initializeInputPlaceholder } from './components/input-placeholder.js';
-import { initializeInstagramAccount } from './components/instagram-account.js';
-import { initializeOptionsMenu } from './components/options-menu.js';
-import { fetchWithRetry } from './fetch-with-retry.js';
-import { apiFetch, isNativeApp, isIOSBrowser, readClipboard, saveDownload } from './platform.js';
-import { createDownloadSession } from './download-session.js';
-import { initializePwa } from './pwa.js';
-import { MP3_QUALITIES } from '/shared/mp3-qualities.js';
+import { SUPPORTED_PLATFORM_PATTERNS, INSTAGRAM_URL_PATTERNS } from '@/shared/platform-patterns.js';
+import { getVideoResolutionDescription } from '@/shared/video-resolutions.js';
+import { getInitialCarouselVideoIndex } from '@/shared/carousel-selection.js';
+import { getInstagramStorySource } from '@/shared/instagram-stories.js';
+import { initializeHomepage } from '@/public/js/homepage.js';
+import { initializeInputPlaceholder } from '@/public/js/components/input-placeholder.js';
+import { initializeInstagramAccount } from '@/public/js/components/instagram-account.js';
+import { initializeOptionsMenu } from '@/public/js/components/options-menu.js';
+import { createQualityGridController } from '@/public/js/components/quality-grid.js';
+import { fetchWithRetry } from '@/public/js/fetch-with-retry.js';
+import { apiFetch, isNativeApp, isIOSBrowser, readClipboard, saveDownload } from '@/public/js/platform.js';
+import { createDownloadSession } from '@/ios-embedded/public/js/download-session.js';
+import { initializePwa } from '@/ios-embedded/public/js/pwa.js';
+import { MP3_QUALITIES } from '@/shared/mp3-qualities.js';
 
 /* ═══════════════════════════════════════════════════════════
    DOWNLINK — Frontend Logic v1.1
@@ -42,8 +43,10 @@ const carouselPrevious = document.getElementById('carouselPrevious');
 const carouselNext = document.getElementById('carouselNext');
 const carouselPosition = document.getElementById('carouselPosition');
 const formatToggle = document.getElementById('formatToggle');
+const formatButtons = [...formatToggle.querySelectorAll('.format-toggle__btn')];
 const qualityGrid = document.getElementById('qualityGrid');
 const downloadBtn = document.getElementById('downloadBtn');
+const downloadBtnText = document.getElementById('downloadBtnText');
 const downloadProgress = document.getElementById('downloadProgress');
 const progressBar = document.getElementById('progressBar');
 const progressText = document.getElementById('progressText');
@@ -77,6 +80,13 @@ let thumbnailTransitionToken = 0;
 let thumbnailTransitionAnimations = [];
 const inputPlaceholder = initializeInputPlaceholder(urlInput);
 const instagramAccount = initializeInstagramAccount({ onChange: handleInstagramConnectionChange });
+const qualityOptions = createQualityGridController(qualityGrid, {
+  onChange(value) {
+    clearDownloadReference();
+    currentQuality = value;
+    updateDownloadBtn();
+  },
+});
 
 function handleInstagramConnectionChange({ connected, reason }) {
   if (currentVideoInfo?.platform === 'instagram') {
@@ -93,7 +103,7 @@ function handleInstagramConnectionChange({ connected, reason }) {
     videoTitle.textContent = '';
     videoChannel.textContent = '';
     videoViews.textContent = '';
-    qualityGrid.innerHTML = '';
+    qualityOptions.clear();
     syncBackgroundState();
     updateDownloadBtn();
   }
@@ -224,14 +234,12 @@ function resetInterface() {
     carouselControls.setAttribute('aria-hidden', 'true');
     carouselPosition.textContent = '';
 
-    qualityGrid.innerHTML = '';
-    qualityGrid.onmousemove = null;
-    qualityGrid.onmouseleave = null;
+    qualityOptions.clear();
     qualityGrid.style.removeProperty('overflow');
 
     currentFormat = 'mp4';
     formatToggle.classList.add('mp4-active');
-    formatToggle.querySelectorAll('.format-toggle__btn').forEach(button => {
+    formatButtons.forEach(button => {
       button.classList.toggle('active', button.dataset.format === 'mp4');
     });
 
@@ -542,14 +550,18 @@ function renderQualityOptions(animateGrid = false) {
     qualityGrid.style.removeProperty('overflow');
   }
 
-  qualityGrid.innerHTML = '';
-
-  if (!currentVideoInfo) return;
+  if (!currentVideoInfo) {
+    qualityOptions.clear();
+    return;
+  }
 
   let options = [];
 
   const selectedVideo = getSelectedVideoInfo();
-  if (!selectedVideo) return;
+  if (!selectedVideo) {
+    qualityOptions.clear();
+    return;
+  }
 
   if (currentFormat === 'mp3') {
     options = [...(currentVideoInfo.audioQualities || [])]
@@ -567,79 +579,7 @@ function renderQualityOptions(animateGrid = false) {
     }));
   }
 
-  options.forEach((opt, i) => {
-    const div = document.createElement('div');
-    div.className = 'quality-option';
-
-    const inputId = `quality-${currentFormat}-${opt.value}`;
-    const isDefaultSelected = currentFormat === 'mp3'
-      ? i === 0
-      : i === 0;
-    const checked = isDefaultSelected ? 'checked' : '';
-
-    div.innerHTML = `
-      <input type="radio" name="quality" id="${inputId}" value="${opt.value}" ${checked}>
-      <label for="${inputId}" class="quality-option__label">
-        <span class="quality-option__value">${opt.label}</span>
-        ${opt.desc ? `<span class="quality-option__desc">${opt.desc}</span>` : ''}
-      </label>
-    `;
-
-    qualityGrid.appendChild(div);
-  });
-
-  // Set default quality
-  const firstRadio = qualityGrid.querySelector('input[type="radio"]');
-  if (firstRadio) {
-    currentQuality = firstRadio.value;
-  }
-
-  // Listen for quality changes
-  qualityGrid.querySelectorAll('input[type="radio"]').forEach(radio => {
-    radio.addEventListener('change', (e) => {
-      clearDownloadReference();
-      currentQuality = e.target.value;
-      updateDownloadBtn();
-    });
-  });
-
-  // Shared spotlight effect on the grid based on mouse position
-  if (qualityGrid) {
-    const labels = [...qualityGrid.querySelectorAll('.quality-option__label')];
-
-    qualityGrid.onmousemove = (event) => {
-      const rect = qualityGrid.getBoundingClientRect();
-      const x = ((event.clientX - rect.left) / rect.width) * 100;
-      const y = ((event.clientY - rect.top) / rect.height) * 100;
-
-      qualityGrid.style.setProperty('--mouse-x', `${x}%`);
-      qualityGrid.style.setProperty('--mouse-y', `${y}%`);
-
-      labels.forEach(label => {
-        const labelRect = label.getBoundingClientRect();
-        const labelCenterX = (labelRect.left + labelRect.width / 2);
-        const labelCenterY = (labelRect.top + labelRect.height / 2);
-        const distanceX = Math.abs(event.clientX - labelCenterX);
-        const distanceY = Math.abs(event.clientY - labelCenterY);
-        const distance = Math.hypot(distanceX, distanceY);
-        const influence = Math.max(0, 1 - distance / 120);
-
-        label.style.setProperty('--mouse-x', `${((event.clientX - labelRect.left) / labelRect.width) * 100}%`);
-        label.style.setProperty('--mouse-y', `${((event.clientY - labelRect.top) / labelRect.height) * 100}%`);
-        label.style.setProperty('--spotlight-strength', influence.toFixed(3));
-      });
-    };
-
-    qualityGrid.onmouseleave = () => {
-      qualityGrid.style.setProperty('--mouse-x', '50%');
-      qualityGrid.style.setProperty('--mouse-y', '50%');
-      labels.forEach(label => {
-        label.style.setProperty('--mouse-x', '50%');
-        label.style.setProperty('--mouse-y', '50%');
-        label.style.setProperty('--spotlight-strength', '0');
-      });
-    };
-  }
+  currentQuality = qualityOptions.render(options, { format: currentFormat });
 
   // Update download button text
   updateDownloadBtn();
@@ -679,9 +619,8 @@ function updateDownloadBtn() {
   const carouselLabel = isInstagramStory()
     ? ` · Story ${currentCarouselIndex + 1}`
     : videos.length > 1 ? ` · Vídeo ${currentCarouselIndex + 1}` : '';
-  const textSpan = document.getElementById('downloadBtnText');
-  if (textSpan) {
-    textSpan.textContent = preparedDownload ? `Guardar ${preparedDownload.format.toUpperCase()}`
+  if (downloadBtnText) {
+    downloadBtnText.textContent = preparedDownload ? `Guardar ${preparedDownload.format.toUpperCase()}`
       : resumableDownload ? 'Retomar descarga'
         : `Descargar ${formatLabel}${carouselLabel}`;
   }
@@ -741,7 +680,7 @@ async function analyzeVideo() {
     // Render quality options for default format
     currentFormat = 'mp4';
     formatToggle.classList.add('mp4-active');
-    formatToggle.querySelectorAll('.format-toggle__btn').forEach(b => {
+    formatButtons.forEach(b => {
       b.classList.toggle('active', b.dataset.format === 'mp4');
     });
     renderSelectedVideo();
@@ -781,12 +720,12 @@ async function restoreDownload() {
   currentFormat = record.format;
   urlInput.value = record.video.url;
   formatToggle.classList.toggle('mp4-active', record.format === 'mp4');
-  formatToggle.querySelectorAll('.format-toggle__btn').forEach(button => {
+  formatButtons.forEach(button => {
     button.classList.toggle('active', button.dataset.format === record.format);
   });
   renderSelectedVideo();
   currentQuality = record.quality;
-  qualityGrid.querySelectorAll('input').forEach(input => { input.checked = input.value === record.quality; });
+  qualityOptions.setSelected(record.quality);
   resultsPanel.classList.add('visible');
   resumableDownload = record;
   await downloadFile();
@@ -817,7 +756,7 @@ async function downloadFile() {
   syncClearButtonState();
   downloadBtn.disabled = true;
   downloadBtn.classList.add('downloading');
-  qualityGrid.querySelectorAll('input').forEach(input => { input.disabled = true; });
+  qualityOptions.setDisabled(true);
   hideError();
   cancelDownloadBtn.hidden = false;
   cancelDownloadBtn.disabled = false;
@@ -954,7 +893,7 @@ async function downloadFile() {
     syncClearButtonState();
     downloadBtn.disabled = false;
     downloadBtn.classList.remove('downloading');
-    qualityGrid.querySelectorAll('input').forEach(input => { input.disabled = false; });
+    qualityOptions.setDisabled(false);
     updateDownloadBtn();
     if (resetAfterCancellation) {
       resetAfterCancellation = false;
@@ -1106,13 +1045,13 @@ carouselNext.addEventListener('click', () => {
 });
 
 // Format toggle buttons
-formatToggle.querySelectorAll('.format-toggle__btn').forEach(btn => {
+formatButtons.forEach(btn => {
   btn.addEventListener('click', () => {
     if (isDownloading) return; // No cambiar formato durante descarga
     clearDownloadReference();
 
     // Update active state
-    formatToggle.querySelectorAll('.format-toggle__btn').forEach(b => b.classList.remove('active'));
+    formatButtons.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
 
     // Update format and slider animation

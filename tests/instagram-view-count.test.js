@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { enrichInstagramViewCounts } from '../server/platforms/instagram/instagram-view-count.js';
+import { enrichInstagramViewCounts } from '@/server/platforms/instagram/instagram-view-count.js';
 
 function response({ ok = true, cookies = [], payload = {} } = {}) {
   return {

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseInstagramStoryVideos, selectInstagramStory, getInstagramStoryError,
-} from '../server/platforms/instagram/instagram-stories.js';
+} from '@/server/platforms/instagram/instagram-stories.js';
 
 test('story metadata preserves stable IDs even when playlist positions change', () => {
   const raw = JSON.stringify({ entries: [

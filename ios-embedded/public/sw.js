@@ -1,13 +1,13 @@
 // Bump this version whenever the app shell changes. Updates activate after the
 // existing windows close, so an in-progress download is never forcibly reloaded.
-const CACHE = 'downlink-shell-v8';
+const CACHE = 'downlink-shell-v10';
 const SHELL = [
   '/', '/index.html', '/manifest.webmanifest',
   '/css/main.css', '/css/options-menu.css', '/css/pwa.css',
   '/js/app.js', '/js/platform.js', '/js/pwa.js', '/js/download-session.js',
   '/js/homepage.js', '/js/fetch-with-retry.js',
   '/js/components/options-menu.js', '/js/components/instagram-account.js',
-  '/js/components/input-placeholder.js',
+  '/js/components/input-placeholder.js', '/js/components/quality-grid.js',
   '/js/backgrounds/contour-background.js',
   '/shared/platform-patterns.js', '/shared/video-resolutions.js',
   '/shared/carousel-selection.js', '/shared/instagram-stories.js', '/shared/mp3-qualities.js',

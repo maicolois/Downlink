@@ -1,4 +1,4 @@
-import { INSTAGRAM_STORY_URL_PATTERNS } from './instagram-stories.js';
+import { INSTAGRAM_STORY_URL_PATTERNS } from '@/shared/instagram-stories.js';
 
 export const YOUTUBE_URL_PATTERNS = [
   /^(https?:\/\/)?(www\.)?youtube\.com\/watch\?v=[\w-]{11}/,

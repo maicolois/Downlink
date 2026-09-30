@@ -4,10 +4,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getInstagramStorySource, isValidInstagramStoryVideoId } from '../shared/instagram-stories.js';
-import { INSTAGRAM_URL_PATTERNS } from '../shared/platform-patterns.js';
-import { InstagramProvider } from '../server/platforms/instagram/instagram-provider.js';
-import { getInstagramCookieArgs } from '../server/platforms/instagram/instagram-cookies.js';
+import { getInstagramStorySource, isValidInstagramStoryVideoId } from '@/shared/instagram-stories.js';
+import { INSTAGRAM_URL_PATTERNS } from '@/shared/platform-patterns.js';
+import { InstagramProvider } from '@/server/platforms/instagram/instagram-provider.js';
+import { getInstagramCookieArgs } from '@/server/platforms/instagram/instagram-cookies.js';
 
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 const userSource = {

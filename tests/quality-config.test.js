@@ -5,8 +5,8 @@ import {
   getDisplayResolution,
   getVideoResolutionDescription,
   getVideoResolutionLabel,
-} from '../shared/video-resolutions.js';
-import { MP3_QUALITIES, getMp3BitrateFromQuality } from '../shared/mp3-qualities.js';
+} from '@/shared/video-resolutions.js';
+import { MP3_QUALITIES, getMp3BitrateFromQuality } from '@/shared/mp3-qualities.js';
 
 test('manages common video resolution names from one shared source', () => {
   assert.deepEqual(VIDEO_RESOLUTIONS.map(quality => quality.resolution), [

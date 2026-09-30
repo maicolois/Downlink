@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PlatformRegistry } from '../server/platforms/common/platform-registry.js';
-import { YouTubeProvider } from '../server/platforms/youtube/youtube-provider.js';
-import { XProvider } from '../server/platforms/x/x-provider.js';
-import { InstagramProvider } from '../server/platforms/instagram/instagram-provider.js';
-import { TikTokProvider } from '../server/platforms/tiktok/tiktok-provider.js';
-import { RedditProvider } from '../server/platforms/reddit/reddit-provider.js';
-import { TwitchProvider } from '../server/platforms/twitch/twitch-provider.js';
-import { SUPPORTED_PLATFORM_PATTERNS } from '../shared/platform-patterns.js';
+import { PlatformRegistry } from '@/server/platforms/common/platform-registry.js';
+import { YouTubeProvider } from '@/server/platforms/youtube/youtube-provider.js';
+import { XProvider } from '@/server/platforms/x/x-provider.js';
+import { InstagramProvider } from '@/server/platforms/instagram/instagram-provider.js';
+import { TikTokProvider } from '@/server/platforms/tiktok/tiktok-provider.js';
+import { RedditProvider } from '@/server/platforms/reddit/reddit-provider.js';
+import { TwitchProvider } from '@/server/platforms/twitch/twitch-provider.js';
+import { SUPPORTED_PLATFORM_PATTERNS } from '@/shared/platform-patterns.js';
 
 const registry = new PlatformRegistry([
   new YouTubeProvider(), new XProvider(), new InstagramProvider({ cookiesFile: '' }), new TikTokProvider(),

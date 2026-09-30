@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTwitchUnmutedPlaylist } from '../server/platforms/twitch/twitch-unmute.js';
+import { buildTwitchUnmutedPlaylist } from '@/server/platforms/twitch/twitch-unmute.js';
 
 const high = 'https://video-edge.example/vod/1080p60/index-muted-token.m3u8';
 const low = 'https://video-edge.example/vod/720p60/index-muted-token.m3u8';

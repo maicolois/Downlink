@@ -60,6 +60,10 @@ tests/          # Pruebas automatizadas y sus fixtures
 
 Los directorios `bin/` y `downloads/` se crean durante la ejecución y no se incluyen en Git. El fondo anterior se conserva como `public/js/backgrounds/wave-background.js` para poder reutilizarlo.
 
+## Alias de importaciones
+
+Las importaciones JavaScript internas usan `@/` como alias de la raíz del repositorio, por ejemplo `@/shared/platform-patterns.js`. Los comandos de `package.json` registran el alias en Node; la web utiliza el `importmap` de `public/index.html`, y `jsconfig.json` proporciona resolución y autocompletado al editor. Ejecuta el servidor y las pruebas mediante los comandos `npm`, no mediante `node server/index.js` directamente.
+
 ## Menú de opciones
 
 La web se abre directamente en el conversor. El botón de tres puntos con efecto Liquid Glass, en la esquina superior derecha, contiene **Conectar Instagram**. La aplicación nativa iOS reproduce el mismo lenguaje visual y añade el acceso local a **Descargas**.

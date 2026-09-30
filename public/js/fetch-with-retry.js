@@ -1,4 +1,4 @@
-import { apiFetch } from './platform.js';
+import { apiFetch } from '@/public/js/platform.js';
 
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 

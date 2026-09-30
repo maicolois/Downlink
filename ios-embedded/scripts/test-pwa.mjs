@@ -7,13 +7,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { chromium, webkit, devices } from 'playwright-core';
-import { MP3_QUALITIES } from '../../shared/mp3-qualities.js';
-import { mountIosEmbeddedAssets } from '../server.js';
+import { MP3_QUALITIES } from '@/shared/mp3-qualities.js';
+import { mountIosEmbeddedAssets } from '@/ios-embedded/server.js';
+import { createHttpCompression } from '@/server/middleware/http-compression.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const output = path.join(root, 'artifacts/ios-embedded');
 await fs.mkdir(output, { recursive: true });
 const app = express();
+app.use(createHttpCompression());
 app.use(express.json());
 mountIosEmbeddedAssets(app);
 app.use(express.static(path.join(root, 'public')));
@@ -22,7 +24,11 @@ const jobs = new Map();
 let starts = 0;
 let files = 0;
 let lastJob;
-app.get('/api/instagram/session', (_req, res) => res.json({ available: false, connected: false, pending: false }));
+let sessionReads = 0;
+app.get('/api/instagram/session', (_req, res) => {
+  sessionReads += 1;
+  res.json({ available: false, connected: false, pending: false });
+});
 app.post('/api/info', (req, res) => res.json({
   url: req.body.url, platform: 'youtube', title: 'Vídeo de prueba · Downlink', channel: 'Prueba local',
   thumbnail: `${base}/assets/icons/favicon.svg`, duration: 60, view_count: 1234,
@@ -56,6 +62,19 @@ app.get('/api/file/:id', (req, res) => {
 const server = app.listen(0, '127.0.0.1');
 await new Promise(resolve => server.once('listening', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
+const compressedShell = await fetch(`${base}/css/main.css`, {
+  headers: { 'Accept-Encoding': 'gzip' },
+});
+assert.equal(compressedShell.headers.get('content-encoding'), 'gzip', 'Shared web assets should be compressed');
+const mediaProbeId = randomUUID();
+jobs.set(mediaProbeId, { status: 'ready', format: 'mp4', filename: 'downlink.mp4' });
+const mediaProbe = await fetch(`${base}/api/file/${mediaProbeId}`, {
+  headers: { 'Accept-Encoding': 'gzip' },
+});
+assert.equal(mediaProbe.headers.get('content-encoding'), null, 'Prepared media must never be recompressed');
+assert.ok((await mediaProbe.arrayBuffer()).byteLength > 100_000, 'The uncompressed media response stays intact');
+jobs.delete(mediaProbeId);
+files = 0;
 const waitUntil = async condition => {
   for (let i = 0; i < 100; i += 1) {
     if (await condition()) return;
@@ -68,9 +87,24 @@ async function prepare(context, { fallback = false } = {}) {
   await context.addInitScript(() => {
     // Read the real framebuffer during its first draw. CSS color assertions
     // alone cannot catch a transparent or incorrectly composited WebGL canvas.
+    const pointerPresenceUniforms = new WeakSet();
+    const getUniformLocation = WebGL2RenderingContext.prototype.getUniformLocation;
+    WebGL2RenderingContext.prototype.getUniformLocation = function (program, name) {
+      const location = getUniformLocation.call(this, program, name);
+      if (location && name === 'uPointerPresence') pointerPresenceUniforms.add(location);
+      return location;
+    };
+    const uniform1f = WebGL2RenderingContext.prototype.uniform1f;
+    WebGL2RenderingContext.prototype.uniform1f = function (location, value) {
+      if (pointerPresenceUniforms.has(location)) window.backgroundPointerPresence = value;
+      return uniform1f.call(this, location, value);
+    };
     const draw = WebGL2RenderingContext.prototype.drawArrays;
     WebGL2RenderingContext.prototype.drawArrays = function (...args) {
       draw.apply(this, args);
+      if (this.canvas.classList.contains('home-background-canvas')) {
+        window.backgroundDrawCount = (window.backgroundDrawCount || 0) + 1;
+      }
       if (window.backgroundPixels || !this.canvas.classList.contains('home-background-canvas')) return;
       const pixels = new Uint8Array(this.drawingBufferWidth * this.drawingBufferHeight * 4);
       this.readPixels(0, 0, this.drawingBufferWidth, this.drawingBufferHeight, this.RGBA, this.UNSIGNED_BYTE, pixels);
@@ -113,6 +147,10 @@ async function prepare(context, { fallback = false } = {}) {
     assert.ok(pixels.black > 0.5, 'Most of the backdrop must retain the exact desktop black');
     assert.ok(pixels.light >= 9 && pixels.light < 15, 'Contours must not wash out the background');
     assert.ok(pixels.peak > 11 && pixels.peak < 80, 'The dark contours must still be drawn');
+    const initialDraws = await page.evaluate(() => window.backgroundDrawCount);
+    await page.waitForTimeout(250);
+    const additionalDraws = await page.evaluate(draws => window.backgroundDrawCount - draws, initialDraws);
+    assert.ok(additionalDraws > 0, 'The WebGL background should keep animating');
   }
   return { page, errors, diagnostics };
 }
@@ -149,6 +187,55 @@ async function menuChecks(page, name) {
   await page.keyboard.press('Tab');
   assert.equal(await menu.isVisible(), false);
   assert.equal(await trigger.getAttribute('aria-expanded'), 'false');
+}
+
+async function sharedPerformanceChecks(page) {
+  const response = page.waitForResponse(`${base}/api/info`);
+  await page.locator('#urlInput').fill('https://www.youtube.com/watch?v=performance1');
+  await response;
+  await page.locator('#resultsPanel.visible').waitFor();
+
+  const spotlight = await page.evaluate(async () => {
+    const prototype = Element.prototype;
+    const original = prototype.getBoundingClientRect;
+    let reads = 0;
+    prototype.getBoundingClientRect = function (...args) {
+      if (this.id === 'qualityGrid' || this.classList?.contains('quality-option__label')) reads += 1;
+      return original.apply(this, args);
+    };
+    try {
+      const grid = document.querySelector('#qualityGrid');
+      const label = grid.querySelector('.quality-option__label');
+      const bounds = original.call(label);
+      for (let index = 0; index < 80; index += 1) {
+        grid.dispatchEvent(new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: bounds.left + bounds.width / 2,
+          clientY: bounds.top + bounds.height / 2,
+        }));
+      }
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return {
+        reads,
+        options: grid.querySelectorAll('.quality-option__label').length,
+        strength: label.style.getPropertyValue('--spotlight-strength'),
+      };
+    } finally {
+      prototype.getBoundingClientRect = original;
+    }
+  });
+  assert.ok(spotlight.reads <= spotlight.options + 1, 'Pointer events should share one cached geometry read');
+  assert.ok(Number(spotlight.strength) > 0, 'The optimized spotlight should remain interactive');
+
+  const previousSessionReads = sessionReads;
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await waitUntil(() => sessionReads > previousSessionReads);
+  await new Promise(resolve => setTimeout(resolve, 100));
+  assert.equal(sessionReads, previousSessionReads + 1, 'Focus and visibility should share one session refresh');
+  await page.locator('#homeReset').click();
 }
 
 async function mobileChecks(browser, name) {
@@ -252,6 +339,8 @@ try {
   chrome = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'chrome' });
   const desktop = await chrome.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
   const { page, errors } = await prepare(desktop);
+  await page.mouse.move(720, 500);
+  await page.waitForFunction(() => window.backgroundPointerPresence > 0.1);
   await page.waitForTimeout(1100);
   const metrics = await page.evaluate(() => Object.fromEntries([
     '.app-container', '.header', '.header__logo', '.home-controls', '.home-intro', '.footer',
@@ -264,6 +353,7 @@ try {
     assert.deepEqual(metrics, JSON.parse(await fs.readFile(path.join(output, 'desktop-before.json'), 'utf8')));
   }
   await menuChecks(page, 'desktop');
+  await sharedPerformanceChecks(page);
   // Upgrades discard the retired local identity, without blocking startup.
   await page.evaluate(() => {
     localStorage.setItem('downlink.profiles.v1', JSON.stringify([{ id: 'old', name: 'Old profile' }]));

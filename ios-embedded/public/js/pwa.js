@@ -1,4 +1,4 @@
-import { isIOSBrowser, isNativeApp } from './platform.js';
+import { isIOSBrowser, isNativeApp } from '@/public/js/platform.js';
 
 export function initializePwa() {
   if (isNativeApp()) return;

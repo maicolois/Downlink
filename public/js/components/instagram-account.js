@@ -1,4 +1,4 @@
-import { apiFetch, isNativeApp } from '../platform.js';
+import { apiFetch, isNativeApp } from '@/public/js/platform.js';
 
 const SESSION_ENDPOINT = '/api/instagram/session';
 const ACCOUNT_ENDPOINT = '/api/instagram/';
@@ -32,6 +32,7 @@ export function initializeInstagramAccount({ onChange } = {}) {
   let operationSettled = null;
   let requestRevision = 0;
   let refreshPromise = null;
+  let visibleRefreshPromise = null;
   let pollTimer = null;
   let expiryTimer = null;
   let closeTimer = null;
@@ -425,12 +426,18 @@ export function initializeInstagramAccount({ onChange } = {}) {
     restoreFocus();
   });
 
-  async function refreshVisibleSession() {
+  function refreshVisibleSession() {
     if (document.visibilityState !== 'visible') return;
-    await refresh({ fresh: true });
-    if (!dialog.open || closeRequested || busy || operation
-        || !session.pending || !session.captureToken) return;
-    await completeLogin();
+    if (visibleRefreshPromise) return visibleRefreshPromise;
+    visibleRefreshPromise = (async () => {
+      await refresh({ fresh: true });
+      if (!dialog.open || closeRequested || busy || operation
+          || !session.pending || !session.captureToken) return;
+      await completeLogin();
+    })().finally(() => {
+      visibleRefreshPromise = null;
+    });
+    return visibleRefreshPromise;
   }
 
   window.addEventListener('focus', () => { void refreshVisibleSession(); });

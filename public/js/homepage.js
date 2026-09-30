@@ -1,4 +1,4 @@
-import { createContourBackground } from './backgrounds/contour-background.js';
+import { createContourBackground } from '@/public/js/backgrounds/contour-background.js';
 
 export function initializeHomepage() {
   const resultsPanel = document.querySelector('.results-panel');

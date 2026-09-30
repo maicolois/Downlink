@@ -1,5 +1,5 @@
-import { PlatformProvider } from '../common/platform-provider.js';
-import { TIKTOK_URL_PATTERNS } from '../../../shared/platform-patterns.js';
+import { PlatformProvider } from '@/server/platforms/common/platform-provider.js';
+import { TIKTOK_URL_PATTERNS } from '@/shared/platform-patterns.js';
 
 export class TikTokProvider extends PlatformProvider {
   constructor() {

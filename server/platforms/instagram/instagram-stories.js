@@ -1,5 +1,5 @@
-import { parseVideoInfoCollection } from '../common/video-metadata.js';
-import { isValidInstagramStoryVideoId } from '../../../shared/instagram-stories.js';
+import { parseVideoInfoCollection } from '@/server/platforms/common/video-metadata.js';
+import { isValidInstagramStoryVideoId } from '@/shared/instagram-stories.js';
 
 export function storyUnavailableError() {
   return Object.assign(new Error('La story seleccionada ya no está disponible. Vuelve a analizar el usuario.'), {

@@ -1,4 +1,4 @@
-import { getViewCount } from '../common/video-metadata.js';
+import { getViewCount } from '@/server/platforms/common/video-metadata.js';
 
 const INSTAGRAM_GRAPHQL_URL = 'https://www.instagram.com/graphql/query';
 const INSTAGRAM_REELS_DOC_ID = '27234427476213202';

@@ -6,7 +6,7 @@ import {
   getVideoDuration,
   getVideoFormats,
   getViewCount,
-} from '../server/platforms/common/video-metadata.js';
+} from '@/server/platforms/common/video-metadata.js';
 
 test('extracts carousel video metadata with parent fallbacks', () => {
   const info = parseVideoInfo(JSON.stringify({

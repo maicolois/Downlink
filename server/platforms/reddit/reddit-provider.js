@@ -1,5 +1,5 @@
-import { PlatformProvider } from '../common/platform-provider.js';
-import { REDDIT_URL_PATTERNS } from '../../../shared/platform-patterns.js';
+import { PlatformProvider } from '@/server/platforms/common/platform-provider.js';
+import { REDDIT_URL_PATTERNS } from '@/shared/platform-patterns.js';
 
 export class RedditProvider extends PlatformProvider {
   constructor() {

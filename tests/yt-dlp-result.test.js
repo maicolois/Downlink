@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getYtDlpInfoOutput } from '../server/services/yt-dlp-result.js';
-import { getInstagramStoryError } from '../server/platforms/instagram/instagram-stories.js';
+import { getYtDlpInfoOutput } from '@/server/services/yt-dlp-result.js';
+import { getInstagramStoryError } from '@/server/platforms/instagram/instagram-stories.js';
 
 test('a failed extractor printing null preserves the real login error', () => {
   for (const allowPartialPlaylist of [false, true]) {

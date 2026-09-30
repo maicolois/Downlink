@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   getInitialCarouselVideoIndex,
   getInstagramCarouselItemFromUrl,
-} from '../shared/carousel-selection.js';
+} from '@/shared/carousel-selection.js';
 
 const videos = [
   { id: 'video-1', playlistItem: 1 },

@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { serveTwitchPlaylist, TwitchProvider } from '../server/platforms/twitch/twitch-provider.js';
-import { deriveTwitchSourceUrl, probeTwitchSource } from '../server/platforms/twitch/twitch-source.js';
-import { getVideoFormats } from '../server/platforms/common/video-metadata.js';
+import { serveTwitchPlaylist, TwitchProvider } from '@/server/platforms/twitch/twitch-provider.js';
+import { deriveTwitchSourceUrl, probeTwitchSource } from '@/server/platforms/twitch/twitch-source.js';
+import { getVideoFormats } from '@/server/platforms/common/video-metadata.js';
 
 const advertisedUrl = 'https://video-edge.example/channel/vod/1080p60/index-muted-token.m3u8';
 const sourceUrl = 'https://video-edge.example/channel/vod/chunked/index-muted-token.m3u8';

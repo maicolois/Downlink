@@ -9,38 +9,39 @@ import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { createRequire } from 'module';
 import { createInterface } from 'node:readline';
-import { PlatformRegistry } from './platforms/common/platform-registry.js';
-import { YouTubeProvider } from './platforms/youtube/youtube-provider.js';
-import { XProvider } from './platforms/x/x-provider.js';
-import { InstagramProvider } from './platforms/instagram/instagram-provider.js';
-import { getInstagramStorySource, isValidInstagramStoryVideoId } from '../shared/instagram-stories.js';
+import { PlatformRegistry } from '@/server/platforms/common/platform-registry.js';
+import { YouTubeProvider } from '@/server/platforms/youtube/youtube-provider.js';
+import { XProvider } from '@/server/platforms/x/x-provider.js';
+import { InstagramProvider } from '@/server/platforms/instagram/instagram-provider.js';
+import { getInstagramStorySource, isValidInstagramStoryVideoId } from '@/shared/instagram-stories.js';
 import {
   parseInstagramStoryVideos, selectInstagramStory, storyUnavailableError, getInstagramStoryError,
-} from './platforms/instagram/instagram-stories.js';
-import { TikTokProvider } from './platforms/tiktok/tiktok-provider.js';
-import { RedditProvider } from './platforms/reddit/reddit-provider.js';
-import { TwitchProvider } from './platforms/twitch/twitch-provider.js';
+} from '@/server/platforms/instagram/instagram-stories.js';
+import { TikTokProvider } from '@/server/platforms/tiktok/tiktok-provider.js';
+import { RedditProvider } from '@/server/platforms/reddit/reddit-provider.js';
+import { TwitchProvider } from '@/server/platforms/twitch/twitch-provider.js';
 import {
   parseVideoInfoCollection,
   getVideoDuration,
   getVideoFormats,
   getViewCount
-} from './platforms/common/video-metadata.js';
+} from '@/server/platforms/common/video-metadata.js';
 import {
   createFfmpegProgressParser,
   formatDownloadProgress,
   isDownloadDurationComplete,
   parseYtDlpProgress,
   YT_DLP_PROGRESS_ARGS,
-} from './services/download-progress.js';
-import { getYtDlpInfoOutput } from './services/yt-dlp-result.js';
+} from '@/server/services/download-progress.js';
+import { getYtDlpInfoOutput } from '@/server/services/yt-dlp-result.js';
 import {
   buildAppleCompatibleMp4Args,
   buildCompatibleMp4FormatSelector,
-} from './services/mp4-compatibility.js';
-import { createInstagramAuth } from './auth/instagram-auth.js';
-import { MP3_QUALITIES, getMp3BitrateFromQuality } from '../shared/mp3-qualities.js';
-import { mountIosEmbeddedAssets } from '../ios-embedded/server.js';
+} from '@/server/services/mp4-compatibility.js';
+import { createInstagramAuth } from '@/server/auth/instagram-auth.js';
+import { MP3_QUALITIES, getMp3BitrateFromQuality } from '@/shared/mp3-qualities.js';
+import { mountIosEmbeddedAssets } from '@/ios-embedded/server.js';
+import { createHttpCompression } from '@/server/middleware/http-compression.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -246,6 +247,7 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
   fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 }
 
+app.use(createHttpCompression());
 app.use(express.json());
 app.use('/api', instagramAuth.middleware);
 app.use('/api/instagram', instagramAuth.router);

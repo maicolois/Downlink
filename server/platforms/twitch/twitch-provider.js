@@ -1,9 +1,9 @@
-import { PlatformProvider } from '../common/platform-provider.js';
-import { TWITCH_URL_PATTERNS } from '../../../shared/platform-patterns.js';
+import { PlatformProvider } from '@/server/platforms/common/platform-provider.js';
+import { TWITCH_URL_PATTERNS } from '@/shared/platform-patterns.js';
 import { randomUUID } from 'crypto';
 import { createServer } from 'http';
-import { probeTwitchSource } from './twitch-source.js';
-import { buildTwitchUnmutedPlaylist, isTwitchMediaPlaylist } from './twitch-unmute.js';
+import { probeTwitchSource } from '@/server/platforms/twitch/twitch-source.js';
+import { buildTwitchUnmutedPlaylist, isTwitchMediaPlaylist } from '@/server/platforms/twitch/twitch-unmute.js';
 
 function getDirectTwitchFormat(format) {
   return isTwitchMediaPlaylist(format?.url)

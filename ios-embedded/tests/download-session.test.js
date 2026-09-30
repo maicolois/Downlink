@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createDownloadSession, DOWNLOAD_SESSION_KEY } from '../public/js/download-session.js';
+import { createDownloadSession, DOWNLOAD_SESSION_KEY } from '@/ios-embedded/public/js/download-session.js';
 
 function fixture() {
   const data = new Map();

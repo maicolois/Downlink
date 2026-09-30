@@ -4,7 +4,7 @@ import {
   buildAppleCompatibleMp4Args,
   buildCompatibleMp4FormatSelector,
   inspectAppleMp4Compatibility,
-} from '../server/services/mp4-compatibility.js';
+} from '@/server/services/mp4-compatibility.js';
 
 test('prefers H.264 and AAC while retaining a generic format fallback', () => {
   const selector = buildCompatibleMp4FormatSelector('1080');
