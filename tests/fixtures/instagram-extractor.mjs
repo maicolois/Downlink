@@ -4,21 +4,36 @@ import { syncBuiltinESMExports } from 'node:module';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import fs from 'node:fs';
+import path from 'node:path';
 
 childProcess.spawn = (executable, args) => {
-  if (executable !== 'instagram-story-test-extractor') throw new Error('Unexpected subprocess in offline story test');
   const proc = new EventEmitter();
   proc.stdout = new PassThrough();
   proc.stderr = new PassThrough();
   proc.kill = () => true;
   queueMicrotask(() => {
-    fs.appendFileSync(process.env.STORY_FIXTURE_LOG, JSON.stringify(args) + '\n');
-    const url = args.at(-1);
     const finish = (stdout = '', stderr = '', code = 0) => {
       proc.stdout.end(stdout);
       proc.stderr.end(stderr);
       proc.emit('close', code);
     };
+    const executableName = path.basename(executable).toLowerCase();
+    if (executableName.startsWith('ffprobe')) {
+      return finish(JSON.stringify({ streams: [
+        { codec_type: 'video', codec_name: 'h264', pix_fmt: 'yuv420p' },
+        { codec_type: 'audio', codec_name: 'aac' },
+      ] }));
+    }
+    if (executableName.startsWith('ffmpeg')) {
+      const input = args[args.indexOf('-i') + 1];
+      fs.copyFileSync(input, args.at(-1));
+      return finish('', 'progress=end\n');
+    }
+    if (executable !== 'instagram-story-test-extractor') {
+      return finish('', 'Unexpected subprocess in offline story test', 1);
+    }
+    fs.appendFileSync(process.env.STORY_FIXTURE_LOG, JSON.stringify(args) + '\n');
+    const url = args.at(-1);
     if (args.includes('--version')) return finish('fixture\n');
     const cookieOption = args.indexOf('--cookies');
     const account = cookieOption >= 0

@@ -9,6 +9,7 @@ import { initializeOptionsMenu } from './components/options-menu.js';
 import { fetchWithRetry } from './fetch-with-retry.js';
 import { apiFetch, isNativeApp, isIOSBrowser, readClipboard, saveDownload } from './platform.js';
 import { createDownloadSession } from './download-session.js';
+import { initializePwa } from './pwa.js';
 import { MP3_QUALITIES } from '/shared/mp3-qualities.js';
 
 /* ═══════════════════════════════════════════════════════════
@@ -1137,6 +1138,7 @@ cancelDownloadBtn.addEventListener('click', cancelDownload);
 // Initialize with the same resting appearance as the content view.
 initializeOptionsMenu();
 initializeHomepage();
+initializePwa();
 syncBackgroundState();
 void restoreDownload();
 

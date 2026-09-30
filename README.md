@@ -10,6 +10,14 @@ La versión iOS es una aplicación SwiftUI autónoma. Incluye CPython, `yt-dlp`,
 - **Preparación del Mac, firma e instalación:** [`ios/README.md`](ios/README.md).
 - Los archivos terminados aparecen en `En mi iPhone/DOWNLINK/Downloads`.
 
+## Aplicación web instalable para iPhone y iPad
+
+La versión iOS embebida vuelve a estar disponible como PWA en una carpeta independiente. Reutiliza exactamente la interfaz web y se instala desde Safari mediante **Compartir → Añadir a pantalla de inicio**. El iPhone muestra la aplicación, mientras que el equipo o alojamiento que ejecuta Downlink prepara las descargas.
+
+- PWA restaurada: [`ios-embedded/`](ios-embedded/).
+- **Configuración, HTTPS e instalación:** [`ios-embedded/README.md`](ios-embedded/README.md).
+- Pruebas: `npm run test:ios-embedded`.
+
 ## Aplicación Android · POCO X7 Pro
 
 La versión Android funciona directamente en el móvil, con yt-dlp, Python, QuickJS y FFmpeg incluidos. No necesita arrancar Node ni conectar el teléfono a un servidor.
@@ -39,6 +47,7 @@ public/
   css/          # Estilos de la interfaz
   js/           # Código del navegador, separado por componentes y fondos
 ios/            # App nativa SwiftUI para iPhone/iPad y motor local de descargas
+ios-embedded/   # PWA instalable desde Safari; utiliza el servidor web compartido
 references/
   backgrounds/  # Vídeos usados como referencia visual; no se sirven al navegador
 server/
@@ -98,6 +107,7 @@ Referencias: [cookies de yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-d
 ```powershell
 npm test
 npm run test:ios
+npm run test:ios-embedded
 ```
 
 Las pruebas de stories y conexión usan datos simulados y no necesitan una cuenta de Instagram. Cubren sesión, confirmación explícita, CSRF, origen local, separación de cuentas, descargas privadas, caducidad y limpieza. Una descarga real requiere iniciar sesión manualmente y disponer de acceso al contenido.

@@ -7,8 +7,12 @@
   "scripts": {
     "dev": "node --watch server/index.js",
     "start": "node server/index.js",
-    "test": "node --test tests/*.test.js",
-    "test:ios": "node ios/Scripts/test-engine.mjs"
+    "test": "node --test tests/*.test.js ios-embedded/tests/*.test.js",
+    "test:ios": "node ios/Scripts/test-engine.mjs",
+    "test:ios-embedded": "node ios-embedded/scripts/test-pwa.mjs",
+    "test:pwa": "npm run test:ios-embedded",
+    "icons:ios-embedded": "node ios-embedded/scripts/render-icons.mjs",
+    "icons:pwa": "npm run icons:ios-embedded"
   },
   "dependencies": {
     "cors": "^2.8.5",

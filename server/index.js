@@ -34,8 +34,13 @@ import {
   YT_DLP_PROGRESS_ARGS,
 } from './services/download-progress.js';
 import { getYtDlpInfoOutput } from './services/yt-dlp-result.js';
+import {
+  buildAppleCompatibleMp4Args,
+  buildCompatibleMp4FormatSelector,
+} from './services/mp4-compatibility.js';
 import { createInstagramAuth } from './auth/instagram-auth.js';
 import { MP3_QUALITIES, getMp3BitrateFromQuality } from '../shared/mp3-qualities.js';
+import { mountIosEmbeddedAssets } from '../ios-embedded/server.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -135,6 +140,57 @@ async function probeMediaDuration(filePath) {
   });
 }
 
+async function probeMediaStreams(filePath) {
+  getFfmpegLocation();
+  return new Promise((resolve, reject) => {
+    const proc = spawn(LOCAL_FFPROBE_PATH, [
+      '-v', 'error',
+      '-show_entries', 'stream=codec_name,codec_type,pix_fmt',
+      '-of', 'json',
+      filePath,
+    ], { windowsHide: true });
+    let stdout = '';
+    let stderr = '';
+    const timeout = setTimeout(() => {
+      void terminateConverter(proc);
+      reject(new Error('FFprobe tardó demasiado en comprobar la compatibilidad del MP4.'));
+    }, 30_000);
+    timeout.unref?.();
+
+    proc.stdout?.on('data', chunk => { stdout += chunk.toString(); });
+    proc.stderr?.on('data', chunk => { stderr += chunk.toString(); });
+    proc.once('error', error => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    proc.once('close', code => {
+      clearTimeout(timeout);
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || 'No se pudo comprobar la compatibilidad del MP4.'));
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout);
+        resolve(Array.isArray(result.streams) ? result.streams : []);
+      } catch {
+        reject(new Error('FFprobe devolvió una respuesta no válida al comprobar el MP4.'));
+      }
+    });
+  });
+}
+
+function replaceCompletedFile(originalPath, replacementPath) {
+  const backupPath = `${originalPath}.source`;
+  fs.renameSync(originalPath, backupPath);
+  try {
+    fs.renameSync(replacementPath, originalPath);
+  } catch (error) {
+    fs.renameSync(backupPath, originalPath);
+    throw error;
+  }
+  try { fs.unlinkSync(backupPath); } catch { /* Periodic cleanup will remove the private source copy. */ }
+}
+
 async function warmYtDlp() {
   try {
     const executable = await getYtDlpExecutable();
@@ -194,6 +250,7 @@ app.use(express.json());
 app.use('/api', instagramAuth.middleware);
 app.use('/api/instagram', instagramAuth.router);
 app.use(cors());
+mountIosEmbeddedAssets(app);
 app.use(express.static(path.join(PROJECT_ROOT, 'public'), {
   setHeaders(res, filePath) {
     if (path.basename(filePath) === 'index.html') {
@@ -710,9 +767,8 @@ async function performDownloadJob(job, provider) {
       job.finalExtension = '.mp3';
       job.filename = `${safeTitle}.mp3`;
     } else {
-      const heightFilter = job.quality === 'best' ? '' : `[height<=${job.quality}]`;
       ytArgs = [
-        '-f', `bestvideo${heightFilter}+bestaudio/best${heightFilter}/bestvideo${heightFilter}/best`,
+        '-f', buildCompatibleMp4FormatSelector(job.quality),
         '--merge-output-format', 'mp4',
         '--recode-video', 'mp4',
         '--no-playlist',
@@ -734,6 +790,28 @@ async function performDownloadJob(job, provider) {
         if (job.isInstagramStory) throw storyUnavailableError();
         throw new Error('No se pudo generar el archivo MP4.');
       }
+
+      const streams = await probeMediaStreams(job.filePath);
+      assertJobActive(job);
+      const compatiblePath = path.join(DOWNLOADS_DIR, `${job.id}.compatible.mp4`);
+      const { args: compatibilityArgs, compatibility } = buildAppleCompatibleMp4Args({
+        inputPath: job.filePath,
+        outputPath: compatiblePath,
+        streams,
+      });
+      job.status = 'converting';
+      job.progress = '99%';
+      job.ffmpegProgressDetail = compatibility.compatible
+        ? 'Optimizando MP4 para iPhone...'
+        : 'Convirtiendo a H.264 para iPhone...';
+      job.progressDetail = job.ffmpegProgressDetail;
+      try {
+        await runJobProcess(job, LOCAL_FFMPEG_PATH, compatibilityArgs, 'ffmpeg');
+      } finally {
+        delete job.ffmpegProgressDetail;
+      }
+      assertJobActive(job);
+      replaceCompletedFile(job.filePath, compatiblePath);
       job.finalExtension = '.mp4';
       job.filename = `${safeTitle}.mp4`;
     }
@@ -806,8 +884,10 @@ function parseProgress(job, line, parseFfmpegProgress) {
   const ffmpegProgress = parseFfmpegProgress(line);
   if (ffmpegProgress) {
     if (ffmpegProgress.progress) job.progress = ffmpegProgress.progress;
-    job.progressDetail = ffmpegProgress.detail;
-    job.status = ffmpegProgress.finalizing ? 'converting' : 'downloading';
+    job.progressDetail = job.ffmpegProgressDetail || ffmpegProgress.detail;
+    job.status = job.ffmpegProgressDetail
+      ? 'converting'
+      : (ffmpegProgress.finalizing ? 'converting' : 'downloading');
     return;
   }
 
