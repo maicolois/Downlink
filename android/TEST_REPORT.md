@@ -8,7 +8,7 @@
 - Signed personal release; `debuggable=false`. APK signature verification and ZIP alignment checks passed.
 - Phone APK SHA-256: `1e5a8d33e74757713ddcf4a3624d7262f3be698c8af1e5cd71f3d52282847917`.
 - Signing certificate SHA-256: `34dcc2a3488c32d72c11c701968f3c9243c9e7148d5dc9af074b3e8c1a074307`.
-- A matching copy is available at `C:\Users\pazpe\Downloads\Downlink-1.0.0-arm64-v8a.apk`.
+- A matching phone APK was copied to a local Downloads directory outside the repository during the historical validation; it is not included in Git.
 
 The tested x86_64 release APK has SHA-256 `6a6ccea018697e1359f0615e4807bbe905cc146ad3653d70cd183656a7161b89`. Its app source, configuration and bundled extractor match the ARM64 build; its native runtime binaries use the emulator's architecture. The packaged binaries for ARM64 Python, FFmpeg and QuickJS were also checked for ARM64/16 KiB ELF alignment. This does not substitute for physical-phone testing.
 

@@ -1,6 +1,6 @@
 # Android components
 
-The Android implementation in this directory is provided under GPL-3.0; see [LICENSE](LICENSE). The pre-existing desktop files retain their original licensing status.
+The Android implementation in this directory is provided under GPL-3.0; see [LICENSE](LICENSE). First-party code elsewhere in Downlink is now covered by the root [GPL-3.0-only license](../LICENSE). The component licenses and source references below are retained and are not replaced by the root license.
 
 | Component | Version | License / corresponding source |
 | --- | --- | --- |

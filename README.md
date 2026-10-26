@@ -1,117 +1,137 @@
 # Downlink
 
-Conversor de YouTube, X, Instagram, TikTok, Reddit y Twitch a MP4 y MP3.
+Download video as MP4 or extract audio as MP3 from supported YouTube, X, Instagram, TikTok, Reddit and Twitch links.
 
-## Aplicación nativa para iPhone y iPad
+Downlink includes a self-hosted web app, an installable web app (PWA), a standalone Android app and a native iOS project. The interface is currently in Spanish. Site availability, account permissions and upstream extractors determine whether an individual link works.
 
-La versión iOS es una aplicación SwiftUI autónoma. Incluye CPython, `yt-dlp`, WebKit como motor JavaScript y FFmpeg, por lo que descarga y convierte directamente en el iPhone sin arrancar Node ni depender de un servidor propio.
+[Español](README.es.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Validation report](docs/VALIDATION.md)
 
-- Proyecto nativo: [`ios/`](ios/).
-- **Preparación del Mac, firma e instalación:** [`ios/README.md`](ios/README.md).
-- Los archivos terminados aparecen en `En mi iPhone/DOWNLINK/Downloads`.
+## Choose a version
 
-## Aplicación web instalable para iPhone y iPad
+| Version | Where extraction and conversion run | Requirements and status | Guide |
+| --- | --- | --- | --- |
+| **Web** | Your computer or server, using Node.js, yt-dlp and FFmpeg | Browser UI; Node.js 22 tested on Windows. Automated tests and startup checked. | [Quick start](#web-quick-start) |
+| **iPhone/iPad PWA** | The same Node server as the web app | Install from Safari; trusted HTTPS for the service worker. The server must stay running. Browser automation does not verify a physical iPhone. | [PWA setup](ios-embedded/README.md) |
+| **Android** | On the phone, using bundled Python, yt-dlp, QuickJS and FFmpeg | Android 10+; ARM64 phone and x86_64 emulator builds. Historical emulator reports exist; this audit could not build without an Android SDK. | [Build, install and test](android/README.md) |
+| **Native iOS** | On the device, through SwiftUI, embedded CPython, WebKit and FFmpeg | iOS 17+ target; macOS and Xcode required. Python engine tested here; Swift compilation and device behavior remain unverified in this audit. | [Mac setup and signing](ios/README.md) |
 
-La versión iOS embebida vuelve a estar disponible como PWA en una carpeta independiente. Reutiliza exactamente la interfaz web y se instala desde Safari mediante **Compartir → Añadir a pantalla de inicio**. El iPhone muestra la aplicación, mientras que el equipo o alojamiento que ejecuta Downlink prepara las descargas.
+The PWA and native iOS project are separate implementations. Installing the PWA does not bundle the download engine on the phone. There are no tagged releases in the repository as of the [2026-10-26 audit](docs/AUDIT.md); generated APK paths in older reports are local build outputs.
 
-- PWA restaurada: [`ios-embedded/`](ios-embedded/).
-- **Configuración, HTTPS e instalación:** [`ios-embedded/README.md`](ios-embedded/README.md).
-- Pruebas: `npm run test:ios-embedded`.
+## What the code supports
 
-## Aplicación Android · POCO X7 Pro
+- Recognize supported links, load metadata and select the available video resolution or MP3 bitrate.
+- Prepare MP4 video or MP3 audio, with progress and cancellation.
+- Select video items from Instagram carousels and stories, including profile, highlight and `@username` inputs.
+- Optionally connect an Instagram session, with different platform-specific login and storage mechanisms.
+- Recover a web/PWA job after reopening while it remains available on the server.
+- On Android, receive shared links, queue downloads and save files through MediaStore to `Download/Downlink`.
 
-La versión Android funciona directamente en el móvil, con yt-dlp, Python, QuickJS y FFmpeg incluidos. No necesita arrancar Node ni conectar el teléfono a un servidor.
+These capabilities are backed by code and the tests described in the [validation report](docs/VALIDATION.md). Automated fixtures do not establish current live-site compatibility. Photos are not converted into videos; inaccessible or expired stories cannot be recovered. MP3 conversion cannot restore missing audio or improve the source's original quality.
 
-- Proyecto nativo: [`android/`](android/).
-- **Instalación del APK en el POCO, compilación y pruebas:** [`android/README.md`](android/README.md).
-- Compilar un APK firmado para uso personal: `./scripts/build-android.sh`.
-- APK para el teléfono: `artifacts/Downlink-1.0.2-arm64-v8a.apk` (generado, excluido de Git). Instálalo como actualización para conservar el historial.
-- Resultados de las pruebas: [`android/TEST_REPORT_1.0.2.md`](android/TEST_REPORT_1.0.2.md).
+## Screenshots
 
-Incluye compartir enlaces hacia Downlink, vista previa automática al pegar un enlace, miniaturas en el historial, MP4/MP3 con selección de calidad, cola con notificaciones y cancelación, abrir/compartir archivos y conexión opcional a Instagram. Los archivos se guardan en `Download/Downlink`.
+Actual production UI captured by the existing browser test on 2026-10-26, without personal accounts or downloaded content. The mobile image uses Chrome's iPhone viewport emulation; it is not a native iOS or Android screenshot.
 
-## Versión web original
+| Desktop web | Mobile web / PWA layout |
+| --- | --- |
+| <img src="docs/screenshots/web-desktop.png" alt="Downlink desktop home page with link input and MP4 and MP3 options" width="720"> | <img src="docs/screenshots/web-mobile.png" alt="Downlink home page at an emulated iPhone viewport" width="260"> |
 
-```powershell
-npm install
-npm run dev
+[Capture provenance and reproduction](docs/screenshots/README.md). Native app screenshots have not been supplied.
+
+## Web quick start
+
+Requirements: Git, npm and Node.js 22 (the tested runtime family), Internet access to install packages and obtain the extractor, and writable local storage for temporary media.
+
+```sh
+git clone https://github.com/maicolois/Downlink.git
+cd Downlink
+npm ci
+npm start
 ```
 
-Abre `http://localhost:3000`.
+Open **http://localhost:3000**. For development with automatic server reloads, use `npm run dev`.
 
-## Estructura del proyecto
+`npm ci` uses the committed lockfile and installs the FFmpeg/FFprobe packages, including native binaries. At startup, the server reuses `bin/yt-dlp*` or downloads the appropriate yt-dlp executable from its upstream latest release. On Unix, the generic extractor may also require Python 3. This automatic extractor download is not pinned like the native platform builds.
 
-```text
-public/
-  assets/       # Iconos y recursos gráficos públicos
-  css/          # Estilos de la interfaz
-  js/           # Código del navegador, separado por componentes y fondos
-ios/            # App nativa SwiftUI para iPhone/iPad y motor local de descargas
-ios-embedded/   # PWA instalable desde Safari; utiliza el servidor web compartido
-references/
-  backgrounds/  # Vídeos usados como referencia visual; no se sirven al navegador
-server/
-  auth/         # Autenticación y sesiones
-  platforms/    # Integraciones organizadas por plataforma
-  services/     # Servicios reutilizables del backend
-shared/         # Código compartido entre navegador y servidor
-tests/          # Pruebas automatizadas y sus fixtures
-```
+| Setting | Purpose |
+| --- | --- |
+| `PORT` | HTTP port; defaults to `3000`. |
+| `HOST` | Bind address; defaults to `127.0.0.1` (this computer only). Set explicitly for LAN/PWA access. |
+| `YT_DLP_PATH` | Optional path to an existing managed yt-dlp executable. |
+| `CHROME_PATH` | Optional Chrome/Chromium executable for the browser test. |
 
-Los directorios `bin/` y `downloads/` se crean durante la ejecución y no se incluyen en Git. El fondo anterior se conserva como `public/js/backgrounds/wave-background.js` para poder reutilizarlo.
-
-## Alias de importaciones
-
-Las importaciones JavaScript internas usan `@/` como alias de la raíz del repositorio, por ejemplo `@/shared/platform-patterns.js`. Los comandos de `package.json` registran el alias en Node; la web utiliza el `importmap` de `public/index.html`, y `jsconfig.json` proporciona resolución y autocompletado al editor. Ejecuta el servidor y las pruebas mediante los comandos `npm`, no mediante `node server/index.js` directamente.
-
-## Menú de opciones
-
-La web se abre directamente en el conversor. El botón de tres puntos con efecto Liquid Glass, en la esquina superior derecha, contiene **Conectar Instagram**. La aplicación nativa iOS reproduce el mismo lenguaje visual y añade el acceso local a **Descargas**.
-
-## Stories de Instagram
-
-En el mismo campo puedes pegar:
-
-- Una story: `https://www.instagram.com/stories/usuario/12345678901234567/`
-- Las stories activas: `https://www.instagram.com/stories/usuario/`
-- Un perfil: `https://www.instagram.com/usuario/`
-- Una colección destacada: `https://www.instagram.com/stories/highlights/12345678901234567/`
-
-También puedes escribir `@usuario` y pulsar Enter. Al pegar, el análisis empieza automáticamente. Las flechas permiten seleccionar una story y descargarla en MP4 o extraer su audio en MP3 cuando lo tenga.
-
-Se muestran **stories en vídeo**; las fotografías no se convierten. Las stories caducadas, eliminadas o inaccesibles para la sesión utilizada no se pueden recuperar. La selección se mantiene por su identificador, aunque cambie el orden de las stories.
-
-### Conectar Instagram en este equipo
-
-1. Instala una vez el [puente local de Instagram](browser-extension/instagram-bridge/README.md) en Chrome o Edge y recarga Downlink.
-2. Abre la aplicación en `http://localhost:3000` en ese mismo navegador.
-3. Abre el botón de tres puntos de la esquina superior derecha, entra en **Conectar Instagram** y pulsa **Abrir Instagram**.
-4. Completa el inicio de sesión y cualquier verificación en la nueva pestaña de `instagram.com`.
-5. Vuelve a la pestaña de Downlink. La conexión se comprobará automáticamente; **Comprobar ahora** queda como alternativa manual.
-6. Pega una story, un perfil o `@usuario`. Si ya había un enlace de Instagram en el campo, se vuelve a analizar al conectar.
-
-La cuenta conectada permite intentar la descarga de los vídeos que **esa cuenta pueda ver**, incluidas las stories privadas para las que tenga autorización. No concede acceso a otras cuentas privadas, stories caducadas o contenido retirado. La extracción todavía depende del soporte de yt-dlp y de la respuesta de Instagram; conectar una sesión no garantiza que todos los enlaces funcionen.
-
-Esta conexión está diseñada para **uso local**. No abre el navegador de un visitante remoto: se desactiva fuera de `localhost`, `127.0.0.1` o `::1` y comprueba también el origen y la conexión real. Publicar la web no convierte esta función en un inicio de sesión remoto. La API oficial con Instagram Login está orientada a cuentas profesionales y no ofrece acceso general a stories privadas de terceros. [Documentación oficial de Meta](https://www.postman.com/meta/instagram/documentation/6yqw8pt/instagram-api).
-
-### Duración y desconexión
-
-La conexión dura como máximo **8 horas**, o menos si caduca la sesión de Instagram, y termina al reiniciar el servidor. Para retirarla, abre **Conectar Instagram** desde el menú de tres puntos y pulsa **Desconectar cuenta**. Se elimina su acceso en esta aplicación; esto no equivale a revocar todas las sesiones de la cuenta en Instagram.
-
-La aplicación no recibe tu contraseña ni tus códigos de verificación. El puente solo lee las cookies de `instagram.com` al volver a Downlink durante una conexión iniciada y las entrega al servidor local mediante un token temporal. Downlink conserva esa sesión únicamente en memoria; para cada extracción crea un archivo temporal independiente y lo elimina al terminar. No guarda capturas ni grabaciones del inicio de sesión.
-
-Cada navegador tiene su propia conexión. Los resultados autenticados no entran en la caché compartida; los trabajos y archivos quedan vinculados a su conexión. Al desconectar, se interrumpen las descargas de esa conexión y se eliminan sus archivos. Las pestañas sincronizan cambios de cuenta y caducidad sin transmitirse credenciales.
-
-El servidor web ya no aplica `INSTAGRAM_COOKIES_FILE` globalmente: una cuenta del servidor no debe compartirse con todos los visitantes. Utiliza el botón de conexión de cada navegador.
-
-Referencias: [cookies de yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp) y [extractor de Instagram](https://github.com/yt-dlp/yt-dlp/blob/2026.08.19/yt_dlp/extractor/instagram.py#L648-L706).
-
-## Pruebas
+There is no automatic `.env` loader in the start script; set environment variables in your shell or service configuration. For example, in PowerShell:
 
 ```powershell
+$env:PORT = '3000'
+npm start
+```
+
+The server listens on **127.0.0.1 by default**. To use the PWA from another device on a trusted local network, set `HOST` to your computer's LAN IP or explicitly to `0.0.0.0` (all IPv4 interfaces) before starting. For example, in PowerShell:
+
+```powershell
+$env:HOST = '0.0.0.0'
+npm start
+```
+
+Open `http://YOUR-COMPUTER-LAN-IP:3000` on the other device. Stop the server and remove the setting with `Remove-Item Env:HOST` to restore the local-only default. A reverse proxy or Tailscale Serve on the same computer can keep the default bind address; see the [PWA guide](ios-embedded/README.md). Public hosting still needs access controls and resource limits. The updated npm lockfile has no advisories reported by the dated [dependency audit](docs/AUDIT.md#dependency-review).
+
+## Instagram and web/PWA behavior
+
+For local desktop login, install the [Chrome/Edge Instagram bridge](browser-extension/instagram-bridge/README.md), open Downlink on `localhost`, and choose **⋯ → Conectar Instagram**. Login happens on Instagram. The server checks the actual local connection and origin; this is not a remote sign-in flow for a hosted PWA.
+
+The web connection lasts up to eight hours and ends when the server restarts. Disconnecting cancels its unfinished private downloads and removes associated server files. The web server does not apply a shared `INSTAGRAM_COOKIES_FILE` to every visitor.
+
+Web/PWA jobs and files are temporary, with a recovery window of up to four hours. The service worker caches the public interface, not media, API responses or account sessions. Offline access to the shell does not provide offline extraction or conversion.
+
+The original detailed instructions for stories, session isolation, cleanup and import aliases are preserved in the [Spanish web technical guide](docs/web-guide.es.md). Follow the separate [Android](android/README.md) and [native iOS](ios/README.md) guides for their login and storage behavior.
+
+## Run the tests
+
+From the repository root after `npm ci`:
+
+```sh
 npm test
 npm run test:ios
+node node_modules/playwright-core/cli.js install webkit
 npm run test:ios-embedded
 ```
 
-Las pruebas de stories y conexión usan datos simulados y no necesitan una cuenta de Instagram. Cubren sesión, confirmación explícita, CSRF, origen local, separación de cuentas, descargas privadas, caducidad y limpieza. Una descarga real requiere iniciar sesión manualmente y disponer de acceso al contenido.
+- `npm test`: Node unit and fixture-backed API tests, including PWA download-session tests.
+- `npm run test:ios`: Python engine tests, not an Xcode build. Requires Python 3; without yt-dlp, two tests skip. For the complete suite, install the version used by the native bootstrap in an isolated Python environment: `python -m pip install yt-dlp==2026.8.19`. On Windows the runner prefers `py -3`, so ensure that interpreter can import the package.
+- `npm run test:ios-embedded`: actual UI/service worker with a synthetic API. Requires Google Chrome or `CHROME_PATH`, plus Playwright WebKit. It does not download from third-party platforms.
+
+For Android unit/lint/emulator commands and iOS build verification, use the platform guides. See [dated outcomes and limitations](docs/VALIDATION.md), including the earlier browser failure and the test synchronization change. [GitHub Actions](.github/workflows/ci.yml) is configured for Node, Python, browser and npm audit checks. The [CI guide](docs/CI_PROPOSAL.md) explains its scope; no remote run has been verified yet.
+
+## Repository layout
+
+```text
+public/                         Shared browser interface, styles and assets
+server/                         Express API, auth, providers and conversion services
+shared/                         Link patterns, quality definitions and selection helpers
+ios-embedded/                   PWA assets, service worker and browser tests
+android/                        Native Android app, tests and third-party notices
+ios/                            Native SwiftUI project, Python engine and bootstrap scripts
+browser-extension/instagram-bridge/  Local desktop Instagram session bridge
+tests/                          Node tests and synthetic extractor fixtures
+scripts/                        Node alias loader and Android build/test tooling
+docs/                           Audit, validation, screenshots and maintainer proposals
+```
+
+Use the npm commands: internal JavaScript imports use the `@/` root alias registered by these scripts. The browser uses the import map in `public/index.html`; editor resolution is in `jsconfig.json`. The older wave background remains in `public/js/backgrounds/wave-background.js`.
+
+`bin/`, `downloads/`, `node_modules/`, `artifacts/`, signing keys and local configuration are ignored by Git. Keep local downloads and account material out of commits and source archives.
+
+## Contributing and security
+
+Small, focused contributions with reproducible examples are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); report vulnerabilities using [SECURITY.md](SECURITY.md).
+
+The [maintainer audit](docs/AUDIT.md) contains completed changes, prioritized follow-up work and a suggested GitHub description/topics. A [first prerelease plan](docs/RELEASE_PLAN.md) records verified scope and outstanding checks; no release has been created.
+
+## Licensing status
+
+First-party Downlink code is licensed under **GPL-3.0-only**; see [LICENSE](LICENSE). Existing third-party code, binaries and assets retain their respective licenses and notices. The root license does not relicense those components.
+
+Android's existing [license](android/LICENSE) and [component notices](android/THIRD_PARTY.md) are retained. Native iOS uses GPL-licensed FFmpeg dependencies; see [its licensing notes](ios/README.md#licencias). Binary distribution still requires reviewing the licenses and corresponding-source obligations of the exact bundled components.
+
+Download only content you own or are authorized to download, respecting copyright and each service's terms.

@@ -26,7 +26,7 @@ test('connected accounts isolate metadata, private downloads and revocation thro
     'server/index.js',
   ], {
     cwd: root, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: String(port), YT_DLP_PATH: 'instagram-story-test-extractor',
+    env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), YT_DLP_PATH: 'instagram-story-test-extractor',
       INSTAGRAM_COOKIES_FILE: '', INSTAGRAM_LOGIN_MODE: 'isolated-browser', STORY_FIXTURE_LOG: logPath },
   });
   let logs = '';

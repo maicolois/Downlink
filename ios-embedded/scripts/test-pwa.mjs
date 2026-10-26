@@ -195,6 +195,16 @@ async function sharedPerformanceChecks(page) {
   await response;
   await page.locator('#resultsPanel.visible').waitFor();
 
+  // The results panel enters with a transform animation. Settle it and place the
+  // real pointer over the grid so a native pointerleave cannot reset the effect
+  // between our synthetic pointer burst and the next animation frame.
+  await page.locator('#resultsPanel').evaluate(async panel => {
+    await Promise.all(panel.getAnimations({ subtree: true })
+      .filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime))
+      .map(animation => animation.finished));
+  });
+  await page.locator('#qualityGrid .quality-option__label').first().hover();
+
   const spotlight = await page.evaluate(async () => {
     const prototype = Element.prototype;
     const original = prototype.getBoundingClientRect;

@@ -4,6 +4,8 @@ Aplicación nativa SwiftUI que replica el diseño de la web y ejecuta las descar
 
 ## Preparación en el Mac
 
+**Estado de validación (26 de octubre de 2026):** se han ejecutado las diez pruebas del motor Python en Windows. Esta auditoría no ha compilado Swift ni ejecutado XCTest o la app en un dispositivo Apple. El objetivo mínimo del proyecto es iOS 17.0. Consulta el [informe de validación](../docs/VALIDATION.md); disponer del código nativo no implica una distribución lista para instalar.
+
 Requisitos: macOS, Xcode 26 o posterior completo, sus herramientas de línea de comandos, Python 3 y unos 3 GB libres durante la preparación. Si tienes Homebrew, el script puede instalar Python 3 y XcodeGen cuando falten.
 
 ```sh
