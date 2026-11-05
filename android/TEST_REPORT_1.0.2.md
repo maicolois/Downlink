@@ -12,7 +12,7 @@ Portrait and landscape images keep their proportions in both the link preview an
 - Emulator SHA-256: `f66cbe6acf8e98ecc1083f68dcbe1512a7d8a908eff016e06b6572c18fbea5bf`.
 - Signature and 16 KiB ZIP alignment verification passed.
 - Signing certificate remains `34dcc2a3488c32d72c11c701968f3c9243c9e7148d5dc9af074b3e8c1a074307`.
-- Matching phone APK copied to `C:\Users\pazpe\Downloads\Downlink-1.0.2-arm64-v8a.apk`.
+- Matching phone APK copied to a local Downloads directory outside the repository during the historical validation; it is not included in Git.
 
 Open the APK on the phone and choose **Update / Actualizar**. Keep the existing app installed to retain history and preferences.
 

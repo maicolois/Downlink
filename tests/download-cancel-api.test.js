@@ -25,7 +25,7 @@ test('YouTube and Twitch report download details and cancellation removes partia
     cwd: root,
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: String(port), YT_DLP_PATH: 'cancellable-test-extractor', INSTAGRAM_COOKIES_FILE: '' }
+    env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), YT_DLP_PATH: 'cancellable-test-extractor', INSTAGRAM_COOKIES_FILE: '' }
   });
   let logs = '';
   child.stdout.on('data', chunk => { logs += chunk; });

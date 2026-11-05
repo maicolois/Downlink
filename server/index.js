@@ -239,6 +239,7 @@ async function downloadYtDlp() {
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST?.trim() || '127.0.0.1';
 const instagramAuth = createInstagramAuth({ notifyRevoke: revokeInstagramConnection });
 
 // Carpeta temporal para descargas
@@ -1111,9 +1112,11 @@ setInterval(() => {
 }, 10 * 60 * 1000); // Cada 10 min
 
 // ─── Iniciar servidor ───────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   // Prepare/download the extractor before the first user submits a link.
   void warmYtDlp();
+  const urlHost = ['0.0.0.0', '::'].includes(HOST) ? 'localhost'
+    : HOST.includes(':') ? `[${HOST}]` : HOST;
   console.log('');
   console.log('  ▶️ ══════════════════════════════════════════ ▶️');
   console.log('  ║                                              ║');
@@ -1121,7 +1124,8 @@ app.listen(PORT, () => {
   console.log('  ║ YouTube · X · Instagram · TikTok · Reddit · Twitch ║');
   console.log('  ║               MP3 / MP4                     ║');
   console.log('  ║                                              ║');
-  console.log(`  ║   🚀  http://localhost:${PORT}                  ║`);
+  console.log(`  ║   🚀  http://${urlHost}:${PORT}                  ║`);
+  console.log(`  ║   Escuchando en ${HOST}:${PORT}`);
   console.log('  ║                                              ║');
   console.log('  ▶️ ══════════════════════════════════════════ ▶️');
   console.log('');

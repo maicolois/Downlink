@@ -25,7 +25,7 @@ test('stories API analyzes, downloads the selected ID and reports access/expiry 
     'server/index.js',
   ], {
     cwd: root, windowsHide: true,
-    env: { ...process.env, PORT: String(port), YT_DLP_PATH: 'instagram-story-test-extractor',
+    env: { ...process.env, HOST: '127.0.0.1', PORT: String(port), YT_DLP_PATH: 'instagram-story-test-extractor',
       INSTAGRAM_COOKIES_FILE: '', STORY_FIXTURE_LOG: logPath },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

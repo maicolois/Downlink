@@ -4,7 +4,7 @@ A standalone Android adaptation of the downloader in this repository, built for 
 
 ## Install on your POCO X7 Pro
 
-1. Get **`artifacts/Downlink-1.0.2-arm64-v8a.apk`** from this checkout. Use the ARM64 file for the phone; the x86_64 file is for the emulator.
+1. Build the APK using the [build instructions](#build), or obtain an approved build from the maintainer. The generated path is **`artifacts/Downlink-1.0.2-arm64-v8a.apk`**; APKs are ignored by Git and are not included in a fresh clone. Use the ARM64 file for the phone; the x86_64 file is for the emulator.
 2. Connect the phone to your PC with USB, choose **File transfer**, and copy the APK into the phone's **Download** folder. Alternatively, transfer the APK using your usual file-transfer method.
 3. Open **Files / File Manager → Downloads** on the phone and tap the APK.
 4. If Android blocks this first installation, open the **Settings** button in that prompt and enable **Allow from this source** for the file manager you are using. Return to the installer and tap **Install**. You can switch that permission off afterwards. If the menu differs, search Settings for **Install unknown apps**. [Xiaomi's installation instructions](https://www.mi.com/global/support/faq/details/KA-06974/).
@@ -12,15 +12,11 @@ A standalone Android adaptation of the downloader in this repository, built for 
 6. If HyperOS interrupts downloads while the screen is off, open **Downlink → Ajustes → Ajustes de Android**, then the app's **Battery / Battery saver** settings and choose **No restrictions / Sin restricciones**. Menu names vary by HyperOS version.
 7. Paste a link and its preview loads automatically. Choose **Vídeo · MP4** or **Audio · MP3**, choose a quality, and tap **Descargar**. You can also use **Share → Downlink** from YouTube, Instagram, TikTok, or a browser. **Analizar** lets you retry metadata loading.
 
-**Updating from 1.0.0 or 1.0.1:** open the new APK and accept **Update / Actualizar**. Do not uninstall the current app. Version 1.0.2 uses the same personal signing key and preserves your history, settings and downloaded files. A copy of the new phone APK is in `C:\Users\pazpe\Downloads` on this workstation.
+**Updating from 1.0.0 or 1.0.1:** open the new APK and accept **Update / Actualizar**. Do not uninstall the current app. The historical 1.0.2 build used the same personal signing key and preserved history, settings and downloaded files. A new contributor's separately generated key will not match that installation; updates require the original signing key.
 
 Completed files are in **Internal storage / Download / Downlink** and the app's **Biblioteca**. **Abrir** plays a file using an installed player; **Compartir** shares the actual file. Removing an item from the app's history leaves its saved file in Downloads.
 
-On this workstation, the checkout is accessible from Windows Explorer at:
-
-```text
-\\wsl.localhost\Ubuntu\home\pazpe\DownlinkAndroid\artifacts
-```
+For WSL builds, access the generated `artifacts/` directory through your distribution's Windows Explorer integration, or copy the APK to a directory accessible to Windows. The output location is relative to your own checkout.
 
 You do **not** need root access, an unlocked bootloader, Android Studio on the phone, or USB debugging for installation through File Manager.
 
@@ -70,6 +66,8 @@ Normal backgrounding and activity recreation keep the download service running. 
 No broad storage permission is requested. Keep free space for the bundled runtime and both the temporary download and the final copy while it is being saved. Android imposes time limits on background data-sync services, and HyperOS can impose additional battery restrictions.
 
 ## Build
+
+The 2026-10-26 documentation audit could not rerun Android unit tests or lint because no Android SDK was configured. The reports below describe earlier emulator runs, not a fresh physical-device certification. See the [current validation record](../docs/VALIDATION.md).
 
 Prerequisites: JDK 17, Android SDK command-line tools, platform 36 and build-tools, Python 3 (only to create the local signing configuration/package the output), and network access for the first build. Node/npm are only needed for the original desktop app and its tests.
 

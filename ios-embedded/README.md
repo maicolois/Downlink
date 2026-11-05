@@ -32,13 +32,22 @@ El servidor sirve `ios-embedded/public/` en la misma raíz web que `public/`: la
 Desde la raíz del repositorio (un nivel por encima de `ios-embedded/`):
 
 ```powershell
-npm install
+npm ci
 npm start
 ```
 
 En el ordenador se abre en `http://localhost:3000`.
 
-Para una primera comprobación desde un iPhone en la misma Wi-Fi, abre `http://IP-DEL-ORDENADOR:3000` en Safari. Puedes consultar la IPv4 del adaptador Wi-Fi con `ipconfig`. La conexión depende también del cortafuegos del equipo. `localhost` en el teléfono apunta al propio teléfono.
+El servidor escucha solo en `127.0.0.1` por defecto. Para una primera comprobación desde un iPhone en la misma Wi-Fi, detén el servidor y habilita expresamente el acceso de red antes de volver a arrancarlo:
+
+```powershell
+$env:HOST = '0.0.0.0'
+npm start
+```
+
+`0.0.0.0` escucha en todas las interfaces IPv4; también puedes indicar únicamente la IP local del adaptador Wi-Fi en `HOST`. Abre `http://IP-DEL-ORDENADOR:3000` en Safari. Puedes consultar esa IPv4 con `ipconfig`. La conexión depende también del cortafuegos del equipo. `localhost` en el teléfono apunta al propio teléfono.
+
+Para volver al modo local, detén el servidor, ejecuta `Remove-Item Env:HOST` y arráncalo de nuevo. Si utilizas Tailscale Serve o un proxy inverso en el mismo equipo, puedes mantener el valor predeterminado `127.0.0.1`.
 
 En una dirección HTTP de la red local puedes utilizar la web y pegar manualmente los enlaces. Para disponer de inicio sin conexión y de las funciones web que requieren un contexto seguro, utiliza una dirección **HTTPS con certificado válido y confiable para el iPhone**. Aceptar un aviso de certificado no sustituye este requisito.
 

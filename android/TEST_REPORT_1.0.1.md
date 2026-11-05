@@ -10,7 +10,7 @@ Version 1.0.1 (version code 2) adds an automatic image preview after pasting or 
 - Application ID remains `app.downlink.android`; minimum Android 10 / API 29; target SDK 36.
 - Personal release signature verified; non-debuggable; ARM64 ABI; ZIP alignment verified.
 - Signing certificate SHA-256 remains `34dcc2a3488c32d72c11c701968f3c9243c9e7148d5dc9af074b3e8c1a074307`.
-- Identical phone APK copied to `C:\Users\pazpe\Downloads\Downlink-1.0.1-arm64-v8a.apk`.
+- Identical phone APK copied to a local Downloads directory outside the repository during the historical validation; it is not included in Git.
 
 Install this APK over 1.0.0 using **Update / Actualizar**. Do not uninstall the existing app; updating retains its history, preferences and downloaded files.
 
