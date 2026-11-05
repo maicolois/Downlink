@@ -1328,7 +1328,7 @@ body.has-video .home-intro,
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
   will-change: opacity, transform, filter;
 }
@@ -1418,18 +1418,21 @@ body.has-video .home-intro,
   right: 12px;
   bottom: 12px;
   width: auto;
-  min-width: 52px;
-  height: 32px;
-  padding: 5px 12px;
-  color: #fff;
-  font-size: 0.85rem;
+  min-width: 42px;
+  height: 24px;
+  padding: 3px 8px;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 0.68rem;
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   isolation: isolate;
-  background: rgba(255, 255, 255, 0.015);
-  border: 0.75px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(5px) saturate(110%);
+  backdrop-filter: blur(5px) saturate(110%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
 }
 
 .video-card__duration-badge::before {
@@ -1437,19 +1440,7 @@ body.has-video .home-intro,
 }
 
 .video-card__duration-badge::after {
-  content: '';
-  position: absolute;
-  inset: 1px;
-  z-index: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  overflow: hidden;
-  opacity: 0.72;
-  background: rgba(255, 255, 255, 0.012);
-  -webkit-backdrop-filter: blur(0.8px) saturate(112%);
-  backdrop-filter: blur(0.8px) saturate(112%);
-  -webkit-filter: url(#duration-glass);
-  filter: url(#duration-glass);
+  content: none;
 }
 
 .video-card__carousel {

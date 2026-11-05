@@ -12,10 +12,24 @@ export function apiFetch(input, init) {
     : globalThis.fetch(input, init);
 }
 
-export function readClipboard() {
-  return globalThis.DownlinkNative
-    ? globalThis.DownlinkNative.readClipboard()
-    : navigator.clipboard.readText();
+export function canReadClipboard(environment = globalThis) {
+  if (typeof environment.DownlinkNative?.readClipboard === 'function') return true;
+  return environment.isSecureContext === true
+    && typeof environment.navigator?.clipboard?.readText === 'function';
+}
+
+export function readClipboard(environment = globalThis) {
+  if (typeof environment.DownlinkNative?.readClipboard === 'function') {
+    return environment.DownlinkNative.readClipboard();
+  }
+  const clipboard = environment.navigator?.clipboard;
+  if (environment.isSecureContext !== true || typeof clipboard?.readText !== 'function') {
+    return Promise.reject(Object.assign(
+      new Error('El navegador no permite leer el portapapeles desde esta dirección.'),
+      { name: 'NotAllowedError' },
+    ));
+  }
+  return clipboard.readText.call(clipboard);
 }
 
 export async function saveDownload(jobId, filename) {

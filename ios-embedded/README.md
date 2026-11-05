@@ -69,10 +69,10 @@ El botón de tres puntos contiene únicamente **Conectar Instagram**. Para insta
 ## Descargar y reabrir
 
 - Pega un enlace, selecciona MP4 o MP3 y la calidad, y pulsa **Descargar**.
-- Cuando el servidor termine, el mismo botón cambia a **Guardar MP4/MP3**. Púlsalo para entregar el archivo a Safari; según el archivo y la versión de iOS, utiliza Descargas o Compartir → Guardar en Archivos. El mensaje indica que se ha iniciado la entrega, no que iOS ya haya guardado el archivo.
+- Cuando el servidor termine, Downlink abrirá automáticamente por primera vez la confirmación de descarga del propio Safari. Si la cancelas, el botón **Guardar MP4/MP3** seguirá disponible para volver a abrirla más tarde. Según el archivo y la versión de iOS, utiliza Descargas o Compartir → Guardar en Archivos. El mensaje indica que se ha iniciado la entrega, no que iOS ya haya guardado el archivo.
 - Si cierras la web después de que el servidor haya devuelto el identificador de trabajo, la próxima apertura recupera ese trabajo en el mismo navegador o instalación. No comienza otra conversión.
 - Si se pierde la conexión, aparece **Retomar descarga**. Al recuperar la conexión o volver a la app se vuelve a consultar el trabajo.
-- El servidor puede seguir convirtiendo mientras iOS suspende la interfaz. El guardado en el teléfono necesita una acción tuya.
+- El servidor puede seguir convirtiendo mientras iOS suspende la interfaz. El guardado en el teléfono necesita que aceptes la confirmación del sistema o pulses **Guardar MP4/MP3**.
 - Los trabajos son temporales, con una ventana de recuperación de hasta cuatro horas. Reiniciar el servidor pierde los trabajos en memoria. La aplicación explica cuándo un archivo ya no está disponible.
 - Las sesiones privadas de Instagram mantienen su caducidad y eliminación al desconectar. El inicio de sesión de Instagram sigue limitado al ordenador: no se ha convertido en un acceso remoto desde el iPhone.
 

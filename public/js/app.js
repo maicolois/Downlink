@@ -8,7 +8,9 @@ import { initializeInstagramAccount } from '@/public/js/components/instagram-acc
 import { initializeOptionsMenu } from '@/public/js/components/options-menu.js';
 import { createQualityGridController } from '@/public/js/components/quality-grid.js';
 import { fetchWithRetry } from '@/public/js/fetch-with-retry.js';
-import { apiFetch, isNativeApp, isIOSBrowser, readClipboard, saveDownload } from '@/public/js/platform.js';
+import {
+  apiFetch, canReadClipboard, isNativeApp, isIOSBrowser, readClipboard, saveDownload,
+} from '@/public/js/platform.js';
 import { createDownloadSession } from '@/ios-embedded/public/js/download-session.js';
 import { initializePwa } from '@/ios-embedded/public/js/pwa.js';
 import { MP3_QUALITIES } from '@/shared/mp3-qualities.js';
@@ -69,6 +71,7 @@ let currentDownloadJobId = null;
 let preparedDownload = null;
 let resumableDownload = null;
 const downloadSession = createDownloadSession();
+const AUTO_DOWNLOAD_PROMPT_KEY = 'downlink.download.auto-prompt.v1';
 let downloadCancelRequested = false;
 let cancellationPromise = null;
 let resetAfterCancellation = false;
@@ -128,6 +131,19 @@ async function pasteLink() {
   if (urlInput.disabled || isDownloading || isPasting) return;
   const previousValue = urlInput.value;
   const previousRevision = inputRevision;
+
+  // iOS only opens its keyboard/paste controls while the original tap is still
+  // active. Focusing after an asynchronous clipboard rejection is too late.
+  urlInput.focus({ preventScroll: true });
+  urlInput.setSelectionRange(urlInput.value.length, urlInput.value.length);
+  if (!canReadClipboard()) {
+    inputHint.textContent = isIOSBrowser()
+      ? 'Mantén pulsado el campo y toca Pegar. El pegado directo necesita HTTPS.'
+      : 'Pega el enlace directamente en el campo.';
+    inputHint.classList.add('is-notice');
+    return;
+  }
+
   isPasting = true;
   syncClearButtonState();
 
@@ -135,7 +151,6 @@ async function pasteLink() {
     const text = await readClipboard();
     // A clipboard permission prompt can stay open while the field changes.
     if (inputRevision !== previousRevision || urlInput.value !== previousValue || urlInput.disabled || isDownloading) return;
-    urlInput.focus();
     if (!text.trim()) {
       inputHint.textContent = 'Copia un enlace y vuelve a pegarlo.';
       inputHint.classList.add('is-notice');
@@ -145,8 +160,9 @@ async function pasteLink() {
     urlInput.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste' }));
   } catch {
     if (inputRevision !== previousRevision || urlInput.value !== previousValue || urlInput.disabled || isDownloading) return;
-    urlInput.focus();
-    inputHint.textContent = 'Puedes pegar el enlace directamente en el campo.';
+    inputHint.textContent = isIOSBrowser()
+      ? 'Toca Pegar cuando Safari lo solicite o mantén pulsado el campo.'
+      : 'Puedes pegar el enlace directamente en el campo.';
     inputHint.classList.add('is-notice');
   } finally {
     isPasting = false;
@@ -706,6 +722,24 @@ function clearDownloadReference() {
   resumableDownload = null;
 }
 
+async function savePreparedDownload() {
+  if (!preparedDownload) return;
+  try {
+    await saveDownload(preparedDownload.jobId, preparedDownload.filename);
+    completeText.textContent = 'Descarga iniciada · Revisa Descargas en Safari o Archivos';
+  } catch {
+    showError('No se pudo abrir el archivo. Pulsa Guardar para intentarlo de nuevo.');
+  }
+}
+
+function claimAutomaticDownloadPrompt(jobId) {
+  try {
+    if (localStorage.getItem(AUTO_DOWNLOAD_PROMPT_KEY) === jobId) return false;
+    localStorage.setItem(AUTO_DOWNLOAD_PROMPT_KEY, jobId);
+  } catch { /* The Guardar button remains available if storage is blocked. */ }
+  return true;
+}
+
 async function restoreDownload() {
   if (isNativeApp()) return;
   const record = downloadSession.load();
@@ -734,13 +768,7 @@ async function restoreDownload() {
 async function downloadFile() {
   if (isDownloading || !currentVideoInfo) return;
   if (preparedDownload) {
-    try {
-      // Called directly by the user's tap, preserving Safari's user activation.
-      await saveDownload(preparedDownload.jobId, preparedDownload.filename);
-      completeText.textContent = 'Descarga iniciada · Revisa Descargas en Safari o Archivos';
-    } catch {
-      showError('No se pudo abrir el archivo. Pulsa Guardar para intentarlo de nuevo.');
-    }
+    await savePreparedDownload();
     return;
   }
   const selectedVideo = getSelectedVideoInfo();
@@ -864,6 +892,11 @@ async function downloadFile() {
       : isNativeApp()
       ? (saved.saved ? `Archivo ${currentFormat.toUpperCase()} guardado` : 'Archivo preparado · Guardado cancelado')
       : `Descarga ${currentFormat.toUpperCase()} iniciada · Revisa tu navegador`;
+    if (manualSave && isIOSBrowser() && claimAutomaticDownloadPrompt(jobId)) {
+      // Trigger the exact same link as Guardar so iOS can show its native
+      // download confirmation as soon as the file becomes ready.
+      await savePreparedDownload();
+    }
 
   } catch (err) {
     if (canResume && !downloadCancelRequested && currentDownloadJobId) {

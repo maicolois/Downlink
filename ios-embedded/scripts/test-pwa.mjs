@@ -240,6 +240,17 @@ async function sharedPerformanceChecks(page) {
 
 async function mobileChecks(browser, name) {
   const context = await browser.newContext({ ...devices['iPhone 13'], reducedMotion: 'reduce', acceptDownloads: true });
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        readText() {
+          window.clipboardReadCount = (window.clipboardReadCount || 0) + 1;
+          return Promise.resolve('https://www.youtube.com/watch?v=clipboard01');
+        },
+      },
+    });
+  });
   const { page, errors, diagnostics } = await prepare(context);
   const analyze = async url => {
     const response = page.waitForResponse(`${base}/api/info`);
@@ -257,7 +268,48 @@ async function mobileChecks(browser, name) {
   await page.setViewportSize({ width: 390, height: 844 });
   await menuChecks(page, name);
 
+  assert.equal(await page.evaluate(() => isSecureContext), true);
+  const pasteResponse = page.waitForResponse(`${base}/api/info`);
+  await page.locator('#urlPasteButton').tap();
+  await pasteResponse;
+  await page.locator('#resultsPanel.visible').waitFor();
+  assert.equal(await page.locator('#urlInput').inputValue(), 'https://www.youtube.com/watch?v=clipboard01');
+  assert.equal(await page.evaluate(() => window.clipboardReadCount), 1, `${name}: paste should read the clipboard once`);
+  await page.locator('#homeReset').click();
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+  });
+  await page.locator('#urlPasteButton').tap();
+  assert.equal(await page.locator('#urlInput').evaluate(element => element === document.activeElement), true);
+  assert.match(await page.locator('#inputHint').innerText(), /Mantén pulsado el campo y toca Pegar/);
+
   await analyze('https://www.youtube.com/watch?v=abcdefghijk');
+  const thumbnailFit = await page.locator('#videoThumbnail').evaluate(element => {
+    const image = element.getBoundingClientRect();
+    const frame = element.parentElement.getBoundingClientRect();
+    return {
+      objectFit: getComputedStyle(element).objectFit,
+      fillsFrame: Math.abs(image.width - frame.width) <= 1.1 && Math.abs(image.height - frame.height) <= 1.1,
+    };
+  });
+  assert.equal(thumbnailFit.objectFit, 'cover', `${name}: thumbnail should preserve its ratio and cover the frame`);
+  assert.equal(thumbnailFit.fillsFrame, true, `${name}: thumbnail should fill the complete frame`);
+  const durationBadge = await page.locator('.video-card__duration-badge').evaluate(element => {
+    const style = getComputedStyle(element);
+    return {
+      backgroundColor: style.backgroundColor,
+      backdropFilter: style.backdropFilter || style.webkitBackdropFilter,
+      height: element.getBoundingClientRect().height,
+      minWidth: style.minWidth,
+      sheenContent: getComputedStyle(element, '::after').content,
+    };
+  });
+  assert.equal(durationBadge.height, 24, `${name}: duration label should be compact`);
+  assert.equal(durationBadge.minWidth, '42px', `${name}: duration label should use the iOS width`);
+  assert.match(durationBadge.backgroundColor, /^rgba\(0, 0, 0, 0\.62\)$/);
+  assert.match(durationBadge.backdropFilter, /blur\(5px\)/);
+  assert.equal(durationBadge.sheenContent, 'none', `${name}: pale glass sheen should be disabled`);
   await page.screenshot({ path: path.join(output, `${name}-results.png`), fullPage: true, animations: 'disabled' });
   const initialStarts = starts;
   await page.locator('#downloadBtn').click();
@@ -284,6 +336,7 @@ async function mobileChecks(browser, name) {
   assert.equal(offlineResponse.fromServiceWorker(), true);
   await page.waitForFunction(() => document.querySelector('#downloadBtnText').textContent === 'Retomar descarga');
   await page.screenshot({ path: path.join(output, `${name}-offline.png`), fullPage: true });
+  const filesBeforeAutomaticPrompt = files;
   jobs.get(pendingId).status = 'ready';
   if (name.startsWith('webkit')) {
     server.listen(Number(new URL(base).port), '127.0.0.1');
@@ -293,13 +346,17 @@ async function mobileChecks(browser, name) {
     await context.setOffline(false);
   }
   await page.waitForFunction(() => document.querySelector('#downloadBtnText').textContent === 'Guardar MP4');
+  await waitUntil(() => files > filesBeforeAutomaticPrompt);
   diagnostics.networkOutage = false;
   assert.equal(starts, initialStarts + 1, 'Reconnection must not duplicate a conversion');
-  const initialFiles = files;
+  assert.equal(await page.evaluate(() => localStorage.getItem('downlink.download.auto-prompt.v1')), pendingId);
+  const filesAfterAutomaticPrompt = files;
   await page.locator('#downloadBtn').click();
-  await waitUntil(() => files > initialFiles);
+  await waitUntil(() => files > filesAfterAutomaticPrompt);
+  const filesAfterManualSave = files;
   await page.reload();
   await page.waitForFunction(() => document.querySelector('#downloadBtnText').textContent === 'Guardar MP4');
+  assert.equal(files, filesAfterManualSave, 'Reopening must not repeat the first automatic system prompt');
   assert.equal(starts, initialStarts + 1, 'Ready files survive reopening without reconversion');
 
   const cachedPaths = await page.evaluate(async () => {
@@ -319,8 +376,11 @@ async function mobileChecks(browser, name) {
   await page.locator('#downloadBtn').click();
   await waitUntil(() => starts === initialStarts + 2);
   assert.equal(lastJob.format, 'mp3');
+  const mp3Files = files;
   lastJob.status = 'ready';
   await page.waitForFunction(() => document.querySelector('#downloadBtnText').textContent === 'Guardar MP3');
+  await waitUntil(() => files > mp3Files);
+  assert.equal(await page.locator('#downloadBtnText').innerText(), 'Guardar MP3', 'Guardar remains available after the automatic prompt');
   await page.locator('#homeReset').click();
   await analyze('https://www.youtube.com/watch?v=abcdefghij3');
   await page.locator('#downloadBtn').click();
@@ -339,6 +399,28 @@ try {
   chrome = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'chrome' });
   const desktop = await chrome.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
   const { page, errors } = await prepare(desktop);
+  assert.equal(
+    await page.locator('#videoThumbnail').evaluate(element => getComputedStyle(element).objectFit),
+    'cover',
+    'Desktop thumbnail should cover its frame without distortion',
+  );
+  const desktopDurationBadge = await page.locator('.video-card__duration-badge').evaluate(element => {
+    const style = getComputedStyle(element);
+    return {
+      backgroundColor: style.backgroundColor,
+      backdropFilter: style.backdropFilter || style.webkitBackdropFilter,
+      height: style.height,
+      minWidth: style.minWidth,
+      sheenContent: getComputedStyle(element, '::after').content,
+    };
+  });
+  assert.deepEqual(desktopDurationBadge, {
+    backgroundColor: 'rgba(0, 0, 0, 0.62)',
+    backdropFilter: 'blur(5px) saturate(1.1)',
+    height: '24px',
+    minWidth: '42px',
+    sheenContent: 'none',
+  }, 'Desktop should share the compact iOS duration label');
   await page.mouse.move(720, 500);
   await page.waitForFunction(() => window.backgroundPointerPresence > 0.1);
   await page.waitForTimeout(1100);
