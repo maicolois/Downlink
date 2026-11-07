@@ -58,6 +58,7 @@ Open **http://localhost:3000**. For development with automatic server reloads, u
 | `PORT` | HTTP port; defaults to `3000`. |
 | `HOST` | Bind address; defaults to `127.0.0.1` (this computer only). Set explicitly for LAN/PWA access. |
 | `YT_DLP_PATH` | Optional path to an existing managed yt-dlp executable. |
+| `DENO_PATH` | Optional path to Deno for current YouTube JavaScript challenges; the standard Winget installation is detected automatically on Windows. |
 | `CHROME_PATH` | Optional Chrome/Chromium executable for the browser test. |
 
 There is no automatic `.env` loader in the start script; set environment variables in your shell or service configuration. For example, in PowerShell:
@@ -76,9 +77,17 @@ npm start
 
 Open `http://YOUR-COMPUTER-LAN-IP:3000` on the other device. Stop the server and remove the setting with `Remove-Item Env:HOST` to restore the local-only default. A reverse proxy or Tailscale Serve on the same computer can keep the default bind address; see the [PWA guide](ios-embedded/README.md). Public hosting still needs access controls and resource limits. The updated npm lockfile has no advisories reported by the dated [dependency audit](docs/AUDIT.md#dependency-review).
 
+### Age-restricted YouTube videos
+
+Some YouTube videos require a signed-in account. Open Downlink in Chrome on the same computer and choose **Options → YouTube session → Connect YouTube**.
+
+When a video requires authentication, the error also offers **Connect YouTube session**. Activating a session retries the analysis; choose the desired quality and start the download afterwards. If Deno is not detected, Downlink uses its Node.js 22 or newer runtime for YouTube's JavaScript challenges.
+
+Chrome's App-Bound Encryption prevents direct offline cookie decryption. Install the [local YouTube bridge](browser-extension/youtube-bridge/README.md) once through `chrome://extensions` → **Load unpacked**, and open Downlink in Chrome. **Connect YouTube** uses an existing session, or opens a normal sign-in window and closes it when the session is detected. On explicit connection, the extension provides only `youtube.com` cookies through a one-time token. Downlink keeps them in memory and creates an isolated temporary cookie jar only while yt-dlp runs, then removes it. The password never leaves Chrome. The account must already be able to play the content.
+
 ## Instagram and web/PWA behavior
 
-For local desktop login, install the [Chrome/Edge Instagram bridge](browser-extension/instagram-bridge/README.md), open Downlink on `localhost`, and choose **⋯ → Conectar Instagram**. Login happens on Instagram. The server checks the actual local connection and origin; this is not a remote sign-in flow for a hosted PWA.
+For local desktop Instagram login, install the [Chrome/Edge Instagram bridge](browser-extension/instagram-bridge/README.md), open Downlink on `localhost`, and choose the account option. The server checks the actual local connection and origin; this is not a remote sign-in flow for a hosted PWA. YouTube uses its own narrowly scoped local bridge for Chrome.
 
 The web connection lasts up to eight hours and ends when the server restarts. Disconnecting cancels its unfinished private downloads and removes associated server files. The web server does not apply a shared `INSTAGRAM_COOKIES_FILE` to every visitor.
 

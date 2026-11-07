@@ -78,6 +78,14 @@ Abre `http://IP-LOCAL-DEL-ORDENADOR:3000` desde el otro dispositivo. Para recupe
 
 ## Instagram y funcionamiento web/PWA
 
+Para vídeos de YouTube que necesitan una cuenta autorizada, abre Downlink en Chrome y pulsa **⋯ → Sesión de YouTube → Conectar YouTube**. La cuenta debe poder reproducir el contenido en YouTube.
+
+Si YouTube solicita una cuenta al analizar o preparar la descarga, también puedes pulsar **Conectar sesión de YouTube** junto al mensaje. Al activar la sesión, Downlink vuelve a analizar el enlace automáticamente; después elige de nuevo la calidad e inicia la descarga.
+
+Chrome protege sus cookies con App-Bound Encryption, por lo que necesita el [puente local de YouTube](browser-extension/youtube-bridge/README.md). Instálalo una vez desde `chrome://extensions` mediante **Cargar descomprimida** y abre Downlink en Chrome. Al pulsar **Conectar YouTube**, el puente utiliza la sesión existente o abre una ventana normal para iniciar sesión y la cierra al detectar la conexión. La extensión entrega solo las cookies de `youtube.com` mediante un token de un solo uso. Downlink las conserva en memoria y crea un archivo temporal aislado únicamente mientras `yt-dlp` trabaja; después lo elimina. La contraseña nunca sale de Chrome.
+
+YouTube también necesita actualmente un runtime JavaScript. Downlink detecta Deno cuando se instala mediante Winget; se puede indicar otra ubicación con `DENO_PATH`. Si no encuentra Deno, utiliza Node.js 22 o posterior, que ya ejecuta el servidor.
+
 Para conectar Instagram en el ordenador, instala el [puente de Chrome/Edge](browser-extension/instagram-bridge/README.md), abre Downlink en `localhost` y utiliza **⋯ → Conectar Instagram**. El inicio de sesión se realiza en Instagram. El servidor comprueba el origen y la conexión local real; no es un inicio de sesión remoto para la PWA.
 
 La conexión web dura hasta ocho horas y termina al reiniciar el servidor. Desconectar cancela las descargas privadas pendientes y elimina sus archivos del servidor. No se aplica un `INSTAGRAM_COOKIES_FILE` compartido a todos los visitantes.

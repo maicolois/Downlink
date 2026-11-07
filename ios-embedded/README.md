@@ -51,6 +51,22 @@ Para volver al modo local, detén el servidor, ejecuta `Remove-Item Env:HOST` y 
 
 En una dirección HTTP de la red local puedes utilizar la web y pegar manualmente los enlaces. Para disponer de inicio sin conexión y de las funciones web que requieren un contexto seguro, utiliza una dirección **HTTPS con certificado válido y confiable para el iPhone**. Aceptar un aviso de certificado no sustituye este requisito.
 
+Para utilizar desde el iPhone la sesión de YouTube conectada en Chrome en el ordenador, configura el acceso HTTPS local descrito a continuación y vincula el teléfono mediante el código de un solo uso. Las cookies de YouTube permanecen en el ordenador.
+
+## Vincular YouTube en la Wi-Fi local (Windows)
+
+Con ambos dispositivos en la misma red, ejecuta una sola vez desde el ordenador, sustituyendo la dirección por la IPv4 de su Wi-Fi:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup-ios-lan.ps1 -HostAddress 192.168.0.80
+```
+
+Reinicia Downlink. El proceso que sirve `localhost:3000` también abrirá HTTPS en esa IP y el puerto 3443. Para instalar inicialmente el certificado, habilita temporalmente el acceso HTTP de red indicado arriba y abre `http://IP-DEL-ORDENADOR:3000/ios-setup.html` en Safari. La página explica cómo descargar el certificado, instalarlo y activar su confianza en Ajustes. La autoridad local se instala en el iPhone y su clave privada no exportable permanece en el almacén del usuario de Windows; deposita confianza en ella únicamente en tu propia red.
+
+Abre después `https://IP-DEL-ORDENADOR:3443/`. Si deseas usar la app de pantalla de inicio, añádela de nuevo desde esta dirección HTTPS: la instalación HTTP anterior tiene otro almacenamiento. Conecta YouTube en Chrome en el ordenador y pulsa **Vincular iPhone**. Para abrir el QR por primera vez en Safari, escanéalo con la app **Cámara** del iPhone y toca el enlace que aparece. El lector de códigos del Centro de control puede abrirlo en su propia ventana. Desde la app instalada, abre **Sesión de YouTube → Escanear QR**, permite el uso de la cámara y apunta al código del ordenador. También puedes escribir el código manualmente. El vídeo de la cámara se procesa en el teléfono y no se envía al ordenador. Cada código caduca a los tres minutos; la vinculación caduca al desconectar o renovar la sesión del ordenador, o al reiniciar el servidor. El ordenador debe permanecer encendido.
+
+Si cambia la IP del ordenador, esta configuración deja de coincidir con el certificado y necesita regenerarse. La configuración y la clave del servidor se guardan en `secrets/ios-lan`, accesible solo para el usuario de Windows; el certificado público está excluido de Git.
+
 ## HTTPS privado con el ordenador existente
 
 Una opción es Tailscale Serve. Requiere instalar Tailscale en el ordenador y en el iPhone, iniciar sesión y conectar ambos a la misma red privada de Tailscale. Después de arrancar Downlink, ejecuta en otra terminal del ordenador:
@@ -64,7 +80,7 @@ Si Tailscale solicita habilitar HTTPS, completa su configuración. Abre en Safar
 
 Si ya tienes un servidor con dominio y HTTPS, puedes poner un proxy inverso delante del puerto 3000. Sirve la aplicación en la raíz del dominio; la interfaz y `/api` deben compartir origen. El alojamiento tiene que poder ejecutar Node y los conversores, además de almacenar temporalmente los archivos. Si lo expones fuera de una red privada, configura autenticación y límites de consumo.
 
-Esta implementación no publica el proyecto ni configura cuentas, DNS, certificados o redes externas automáticamente.
+Estas alternativas no habilitan el emparejamiento de YouTube: el emparejamiento requiere el origen HTTPS local configurado en el apartado anterior. No se publican cuentas ni servicios externos automáticamente.
 
 ## Instalar en el iPhone
 
@@ -73,7 +89,7 @@ Esta implementación no publica el proyecto ni configura cuentas, DNS, certifica
 3. Activa **Abrir como app web**, si aparece, y pulsa **Añadir**.
 4. Abre el icono de Downlink desde la pantalla de inicio: entrarás directamente en el conversor. La instalación puede tener almacenamiento separado del navegador.
 
-El botón de tres puntos contiene únicamente **Conectar Instagram**. Para instalar la web, sigue los pasos anteriores de Safari. [Guía de Apple](https://support.apple.com/guide/iphone/bookmark-a-website-iph42ab2f3a7/ios).
+El botón de tres puntos contiene **Sesión de YouTube** y **Conectar Instagram**. Para instalar la web, sigue los pasos anteriores de Safari. [Guía de Apple](https://support.apple.com/guide/iphone/bookmark-a-website-iph42ab2f3a7/ios).
 
 ## Descargar y reabrir
 
