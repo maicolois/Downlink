@@ -158,8 +158,8 @@ async function prepare(context, { fallback = false } = {}) {
 }
 
 async function overlayEntranceChecks(browser, name) {
-  // Observe real frames without seeking/finishing animations or disabling them
-  // for screenshots. In reduced motion the entrance must still fade in.
+  // Observe real frames without seeking/finishing animations. Slow playback
+  // until the first intermediate frame so a busy CI runner cannot skip it.
   for (const reducedMotion of ['reduce', 'no-preference']) {
     const context = await browser.newContext({
       viewport: { width: reducedMotion === 'reduce' ? 390 : 1440, height: 900 },
@@ -182,9 +182,17 @@ async function overlayEntranceChecks(browser, name) {
           };
           sample();
           if (!entrance) return { frames, animated: false };
+          const duration = entrance.effect.getTiming().duration;
+          entrance.playbackRate = 0.2;
+          let sawIntermediate = false;
           const collect = () => {
             if (!sampling) return;
             sample();
+            const opacity = frames.at(-1).opacity;
+            if (!sawIntermediate && opacity > 0 && opacity < 1) {
+              sawIntermediate = true;
+              entrance.playbackRate = 1;
+            }
             requestAnimationFrame(collect);
           };
           requestAnimationFrame(collect);
@@ -192,12 +200,14 @@ async function overlayEntranceChecks(browser, name) {
           sampling = false;
           sample();
           const button = document.getElementById('optionsMenuButton');
-          return { frames, animated: true, buttonTransform: getComputedStyle(button).transform,
+          return { frames, duration, animated: true, buttonTransform: getComputedStyle(button).transform,
             dotsTransform: getComputedStyle(button.querySelector('svg')).transform };
         }, { triggerId, targetId });
         assert.ok(result.animated, `${name} ${reducedMotion}: ${targetId} animates on open`);
+        assert.ok(Number.isFinite(result.duration) && result.duration > 0, 'The production animation has a positive duration');
         assert.equal(result.frames[0].opacity, 0, 'No fully-visible first frame');
-        assert.ok(result.frames.some(frame => frame.opacity > 0 && frame.opacity < 1), 'The browser paints intermediate frames');
+        assert.ok(result.frames.some(frame => frame.opacity > 0 && frame.opacity < 1),
+          `${name} ${reducedMotion}: ${targetId} paints intermediate frames`);
         assert.equal(result.frames.at(-1).opacity, 1, 'Opening finishes fully visible');
         assert.equal(result.buttonTransform, 'none', 'The three-dot button stays still');
         assert.equal(result.dotsTransform, 'none', 'The three dots stay still');
