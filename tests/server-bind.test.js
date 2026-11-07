@@ -66,4 +66,15 @@ test('explicit wildcard host enables other addresses without enabling remote Ins
   const response = await fetch(`${base}/api/instagram/session`);
   assert.equal(response.status, 200);
   assert.equal((await response.json()).available, false);
+
+  for (const endpoint of ['/api/info', '/api/download']) {
+    const body = JSON.stringify({ url: 'https://www.youtube.com/watch?v=abcdefghijk', youtubeBrowser: 'firefox', format: 'mp4' });
+    for (const [target, origin] of [[base, base], [`http://127.0.0.1:${port}`, 'https://example.com']]) {
+      const result = await fetch(target + endpoint, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin }, body,
+      });
+      assert.equal(result.status, 403);
+      assert.equal((await result.json()).code, 'YOUTUBE_LOCAL_ONLY');
+    }
+  }
 });

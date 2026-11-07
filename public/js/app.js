@@ -5,6 +5,7 @@ import { getInstagramStorySource } from '@/shared/instagram-stories.js';
 import { initializeHomepage } from '@/public/js/homepage.js';
 import { initializeInputPlaceholder } from '@/public/js/components/input-placeholder.js';
 import { initializeInstagramAccount } from '@/public/js/components/instagram-account.js';
+import { initializeYouTubeAccount } from '@/public/js/components/youtube-account.js';
 import { initializeOptionsMenu } from '@/public/js/components/options-menu.js';
 import { createQualityGridController } from '@/public/js/components/quality-grid.js';
 import { fetchWithRetry } from '@/public/js/fetch-with-retry.js';
@@ -32,6 +33,7 @@ const analyzeStatus = document.getElementById('analyzeStatus');
 const analyzeStatusText = document.getElementById('analyzeStatusText');
 const errorMessage = document.getElementById('errorMessage');
 const errorText = document.getElementById('errorText');
+const youtubeAuthAction = document.getElementById('youtubeAuthAction');
 const resultsPanel = document.getElementById('resultsPanel');
 const videoCard = document.getElementById('videoCard');
 const storyNote = document.getElementById('storyNote');
@@ -67,6 +69,7 @@ let isDownloading = false;
 let isPasting = false;
 let inputRevision = 0;
 let hasUsedInitialAccountState = false;
+let youtubeRetryUrl = null;
 let currentDownloadJobId = null;
 let preparedDownload = null;
 let resumableDownload = null;
@@ -83,6 +86,7 @@ let thumbnailTransitionToken = 0;
 let thumbnailTransitionAnimations = [];
 const inputPlaceholder = initializeInputPlaceholder(urlInput);
 const instagramAccount = initializeInstagramAccount({ onChange: handleInstagramConnectionChange });
+const youtubeAccount = initializeYouTubeAccount({ onConnect: handleYouTubeConnection });
 const qualityOptions = createQualityGridController(qualityGrid, {
   onChange(value) {
     clearDownloadReference();
@@ -114,6 +118,26 @@ function handleInstagramConnectionChange({ connected, reason }) {
   if (connected && reason === 'connected' && !urlInput.disabled && !isDownloading
       && INSTAGRAM_URL_PATTERNS.some(pattern => pattern.test(value))) {
     void analyzeVideo();
+  }
+}
+
+function handleYouTubeConnection() {
+  const retryUrl = youtubeRetryUrl;
+  youtubeRetryUrl = null;
+  if (!retryUrl || urlInput.value.trim() !== retryUrl || urlInput.disabled || isDownloading) return;
+  youtubeAccount.close();
+  void analyzeVideo();
+}
+
+youtubeAuthAction?.addEventListener('click', () => youtubeAccount.open());
+
+function offerYouTubeConnection(code, url) {
+  if (['YOUTUBE_AUTH_REQUIRED', 'YOUTUBE_CHROME_SESSION_REQUIRED', 'YOUTUBE_CHROME_SESSION_EXPIRED',
+    'YOUTUBE_BROWSER_DECRYPTION_FAILED', 'YOUTUBE_BROWSER_SESSION_UNAVAILABLE', 'YOUTUBE_BOT_CHECK',
+    'YOUTUBE_AGE_VERIFICATION_REQUIRED', 'YOUTUBE_PRIVATE', 'YOUTUBE_MEMBERS_ONLY'].includes(code)
+    && urlInput.value.trim() === url && youtubeAuthAction) {
+    youtubeRetryUrl = url;
+    youtubeAuthAction.hidden = false;
   }
 }
 
@@ -530,12 +554,14 @@ function renderSelectedVideo(animate = false, direction = 1) {
 
 // ─── Show Error ─────────────────────────────────────────────
 function showError(msg) {
+  if (youtubeAuthAction) youtubeAuthAction.hidden = true;
   errorText.textContent = msg;
   errorMessage.classList.add('visible');
 }
 
 function hideError() {
   errorMessage.classList.remove('visible');
+  if (youtubeAuthAction) youtubeAuthAction.hidden = true;
 }
 
 // ─── Set Loading State ──────────────────────────────────────
@@ -644,6 +670,7 @@ function updateDownloadBtn() {
 
 // ─── Analyze Video ──────────────────────────────────────────
 async function analyzeVideo() {
+  youtubeRetryUrl = null;
   clearDownloadReference();
   const url = urlInput.value.trim();
   syncBackgroundState();
@@ -672,19 +699,19 @@ async function analyzeVideo() {
       // The account component starts this request while the page is loading.
       // Reuse it instead of issuing a second session request on the first link.
       hasUsedInitialAccountState = true;
-      await instagramAccount.ready;
+      await Promise.all([instagramAccount.ready, youtubeAccount.ready]);
     } else {
-      await instagramAccount.refresh();
+      await Promise.all([instagramAccount.refresh(), youtubeAccount.refresh()]);
     }
     const response = await fetchWithRetry('/api/info', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...instagramAccount.requestHeaders() },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ url, youtubeBrowser: youtubeAccount.getBrowser() })
     });
 
     if (!response.ok) {
       const data = await response.json();
-      throw new Error(data.error || 'Error al analizar el video');
+      throw Object.assign(new Error(data.error || 'Error al analizar el video'), { code: data.code });
     }
 
     currentVideoInfo = await response.json();
@@ -708,6 +735,7 @@ async function analyzeVideo() {
     showError(err instanceof TypeError
       ? 'No se pudo contactar con la aplicación. Vuelve a intentarlo.'
       : err.message);
+    offerYouTubeConnection(err.code, url);
   } finally {
     setAnalyzing(false);
   }
@@ -794,7 +822,7 @@ async function downloadFile() {
   updateProgressUI({ status: 'starting', progress: '0%', progressDetail: 'Iniciando preparación...' });
 
   try {
-    if (!resume) await instagramAccount.refresh();
+    if (!resume) await Promise.all([instagramAccount.refresh(), youtubeAccount.refresh()]);
     if (downloadCancelRequested) throw clientCancelledError();
     if (!currentVideoInfo) throw new Error('La cuenta de Instagram ha cambiado. Vuelve a analizar el enlace.');
     // 1. Iniciar el job en el servidor
@@ -807,6 +835,7 @@ async function downloadFile() {
           url: currentVideoInfo.url,
           format: currentFormat,
           quality: currentQuality,
+          youtubeBrowser: youtubeAccount.getBrowser(),
           playlistItem: currentVideoInfo.platform === 'instagram' && !isInstagramStory()
             ? selectedVideo.playlistItem
             : null,
@@ -816,7 +845,7 @@ async function downloadFile() {
 
       if (!startRes.ok) {
         const err = await startRes.json();
-        throw new Error(err.error || 'Error al iniciar la descarga');
+        throw Object.assign(new Error(err.error || 'Error al iniciar la descarga'), { code: err.code });
       }
 
       ({ jobId } = await startRes.json());
@@ -866,7 +895,7 @@ async function downloadFile() {
 
       if (status.status === 'ready') break;
       if (status.status === 'cancelled') throw clientCancelledError();
-      if (status.status === 'error') throw new Error(status.error || 'Error al descargar');
+      if (status.status === 'error') throw Object.assign(new Error(status.error || 'Error al descargar'), { code: status.code });
     }
 
     if (downloadCancelRequested) {
@@ -916,6 +945,7 @@ async function downloadFile() {
       downloadProgress.classList.remove('visible');
       cancelDownloadBtn.hidden = true;
       showError(canResume ? 'Se ha perdido la conexión. Pulsa Retomar descarga cuando vuelva a estar disponible.' : err.message);
+      if (!canResume) offerYouTubeConnection(err.code, currentVideoInfo?.url);
     }
   } finally {
     currentDownloadJobId = null;

@@ -58,6 +58,12 @@ childProcess.spawn = (executable, args) => {
       return;
     }
 
+    if (args.at(-1).includes('fixture_error=age')) {
+      proc.stderr.write('ERROR: [youtube] Sign in to confirm your age\n');
+      close(1);
+      return;
+    }
+
     const outputTemplate = args[args.indexOf('-o') + 1];
     const partialPath = outputTemplate.replace('%(ext)s', 'mp4') + '.part';
     fs.writeFileSync(partialPath, 'partial download');

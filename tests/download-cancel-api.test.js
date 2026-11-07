@@ -111,6 +111,23 @@ test('YouTube and Twitch report download details and cancellation removes partia
   assert.equal(startingStatus.status, 'cancelled');
   assert.equal(fs.readdirSync(path.join(root, 'downloads')).some(file => file.startsWith(`${startingJobId}.`)), false);
 
+  const restricted = await fetch(`${base}/api/download`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: 'https://www.youtube.com/watch?v=abcdefghijk&fixture_error=age', format: 'mp4', quality: 'best' }),
+  });
+  assert.equal(restricted.status, 200);
+  const restrictedId = (await restricted.json()).jobId;
+  jobIds.push(restrictedId);
+  let restrictedStatus;
+  for (let index = 0; index < 50; index += 1) {
+    restrictedStatus = await (await fetch(`${base}/api/status/${restrictedId}`)).json();
+    if (restrictedStatus.status === 'error') break;
+    await delay(25);
+  }
+  assert.equal(restrictedStatus.status, 'error', logs);
+  assert.equal(restrictedStatus.code, 'YOUTUBE_AUTH_REQUIRED');
+  assert.match(restrictedStatus.error, /Confirma tu edad/);
+
   const twitchStarted = await fetch(`${base}/api/download`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: 'https://www.twitch.tv/videos/1234567890', format: 'mp4', quality: 'best' }),

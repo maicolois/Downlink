@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conectar Downlink en iPhone</title>
+  <style>
+    body{font:16px/1.5 system-ui,sans-serif;background:#101114;color:#eee;max-width:40rem;margin:0 auto;padding:1.5rem}
+    h1{font-size:1.5rem} li{margin:1rem 0} a{color:#cddaff} .button{display:inline-block;padding:.7rem 1rem;border-radius:.6rem;background:#ddd;color:#111;text-decoration:none;font-weight:600}
+  </style>
+</head>
+<body>
+  <h1>Conectar este iPhone</h1>
+  <p>Hazlo una sola vez con el ordenador encendido y ambos dispositivos en la misma Wi-Fi.</p>
+  <ol>
+    <li>Descarga el certificado local de este ordenador.<br><a class="button" href="/downlink-local-ca.cer">Descargar certificado</a></li>
+    <li>Abre <strong>Ajustes → Perfil descargado</strong> e instala el certificado.</li>
+    <li>En <strong>Ajustes → General → Información → Ajustes de confianza de certificados</strong>, activa la confianza para <strong>Downlink Local CA</strong>. Hazlo solo si estás en tu propia red y has abierto la dirección de tu ordenador.</li>
+    <li>Vuelve a Safari y abre <a id="secure-link">Downlink seguro</a>. Para instalar esta versión, usa Compartir → Añadir a pantalla de inicio; la instalación anterior con HTTP utiliza otra dirección.</li>
+    <li>En Downlink del ordenador, conecta YouTube y pulsa <strong>Vincular iPhone</strong>. En la app del iPhone, abre <strong>Sesión de YouTube → Escanear QR</strong> y apunta al código del ordenador.</li>
+  </ol>
+  <p>La confianza en este certificado se aplica al iPhone. Puedes retirarla más adelante desde Ajustes; la clave privada del certificado permanece en el ordenador.</p>
+  <script>document.getElementById('secure-link').href = 'https://' + location.hostname + ':3443/';</script>
+</body>
+</html>

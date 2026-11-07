@@ -9,8 +9,11 @@ import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { createRequire } from 'module';
 import { createInterface } from 'node:readline';
+import https from 'node:https';
+import net from 'node:net';
 import { PlatformRegistry } from '@/server/platforms/common/platform-registry.js';
 import { YouTubeProvider } from '@/server/platforms/youtube/youtube-provider.js';
+import { getYouTubeError } from '@/server/platforms/youtube/youtube-errors.js';
 import { XProvider } from '@/server/platforms/x/x-provider.js';
 import { InstagramProvider } from '@/server/platforms/instagram/instagram-provider.js';
 import { getInstagramStorySource, isValidInstagramStoryVideoId } from '@/shared/instagram-stories.js';
@@ -39,6 +42,8 @@ import {
   buildCompatibleMp4FormatSelector,
 } from '@/server/services/mp4-compatibility.js';
 import { createInstagramAuth } from '@/server/auth/instagram-auth.js';
+import { createYouTubeAuth, isYouTubeLocalRequest } from '@/server/auth/youtube-auth.js';
+import { createYouTubePairing } from '@/server/auth/youtube-pairing.js';
 import { MP3_QUALITIES, getMp3BitrateFromQuality } from '@/shared/mp3-qualities.js';
 import { mountIosEmbeddedAssets } from '@/ios-embedded/server.js';
 import { createHttpCompression } from '@/server/middleware/http-compression.js';
@@ -61,9 +66,28 @@ const ytDlpFileName = process.platform === 'win32'
 const LOCAL_YT_DLP_PATH = path.join(BIN_DIR, ytDlpFileName);
 const LOCAL_FFMPEG_PATH = path.join(BIN_DIR, path.basename(bundledFfmpegPath));
 const LOCAL_FFPROBE_PATH = path.join(BIN_DIR, path.basename(bundledFfprobePath));
+
+function findDenoPath() {
+  const candidates = [
+    process.env.DENO_PATH,
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Links', 'deno.exe'),
+    process.env.LOCALAPPDATA && path.join(
+      process.env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Packages',
+      'DenoLand.Deno_Microsoft.Winget.Source_8wekyb3d8bbwe', 'deno.exe',
+    ),
+    process.env.ProgramFiles && path.join(process.env.ProgramFiles, 'Deno', 'deno.exe'),
+  ].filter(Boolean);
+
+  return candidates.find(candidate => {
+    try { return fs.statSync(candidate).isFile(); } catch { return false; }
+  }) || null;
+}
+
+const LOCAL_DENO_PATH = findDenoPath();
+const LOCAL_NODE_PATH = Number(process.versions.node.split('.')[0]) >= 22 ? process.execPath : null;
 let ytDlpDownloadPromise = null;
 const platformRegistry = new PlatformRegistry([
-  new YouTubeProvider(),
+  new YouTubeProvider({ denoPath: LOCAL_DENO_PATH, nodePath: LOCAL_NODE_PATH }),
   new XProvider(),
   // Account cookies belong to the connected browser, never to a shared provider.
   new InstagramProvider({ cookiesFile: '' }),
@@ -240,7 +264,34 @@ async function downloadYtDlp() {
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST?.trim() || '127.0.0.1';
+function loadIosLanConfig() {
+  const file = path.join(PROJECT_ROOT, 'secrets', 'ios-lan', 'config.json');
+  if (!fs.existsSync(file)) return null;
+  try {
+    const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (net.isIP(config.host) !== 4 || !Number.isInteger(config.port) || config.port < 1 || config.port > 65535
+        || typeof config.passphrase !== 'string' || !config.passphrase) throw new Error('invalid configuration');
+    const pfx = fs.readFileSync(path.join(PROJECT_ROOT, 'secrets', 'ios-lan', 'server.pfx'));
+    return { host: config.host, port: config.port, passphrase: config.passphrase, pfx,
+      origin: `https://${config.host}:${config.port}` };
+  } catch {
+    console.error('No se pudo cargar la configuración segura para iPhone.');
+    return null;
+  }
+}
+const iosLanConfig = loadIosLanConfig();
 const instagramAuth = createInstagramAuth({ notifyRevoke: revokeInstagramConnection });
+let youtubePairing;
+const youtubeAuth = createYouTubeAuth({
+  notifyRevoke: revokeYouTubeConnection,
+  pairingAvailable: () => Boolean(iosLanConfig),
+  remoteSession: req => {
+    if (!youtubePairing?.secureRequest(req)) return null;
+    const device = youtubePairing.device(req);
+    return { connected: Boolean(device), expiresAt: device?.expiresAt };
+  },
+});
+youtubePairing = createYouTubePairing({ youtubeAuth, origin: iosLanConfig?.origin });
 
 // Carpeta temporal para descargas
 const DOWNLOADS_DIR = path.join(PROJECT_ROOT, 'downloads');
@@ -252,8 +303,11 @@ app.use(createHttpCompression());
 app.use(express.json());
 app.use('/api', instagramAuth.middleware);
 app.use('/api/instagram', instagramAuth.router);
+app.use('/api/youtube/pairing', youtubePairing.router);
+app.use('/api/youtube', youtubeAuth.router);
 app.use(cors());
 mountIosEmbeddedAssets(app);
+app.get('/js/vendor/jsqr.js', (_req, res) => res.sendFile(path.join(PROJECT_ROOT, 'node_modules', 'jsqr', 'dist', 'jsQR.js')));
 app.use(express.static(path.join(PROJECT_ROOT, 'public'), {
   setHeaders(res, filePath) {
     if (path.basename(filePath) === 'index.html') {
@@ -274,6 +328,14 @@ function assertInstagramConnection(context) {
   }
 }
 
+function assertYouTubeConnection(context) {
+  if (context && !youtubeAuth.isCurrent(context)) {
+    throw Object.assign(new Error('La sesión de Chrome ha caducado o se ha desconectado. Vuelve a conectarla desde Sesión de YouTube.'), {
+      code: 'YOUTUBE_CHROME_SESSION_EXPIRED', status: 401,
+    });
+  }
+}
+
 function trackProtectedProcess(context, process) {
   if (!context) return;
   if (!protectedProcesses.has(context.key)) protectedProcesses.set(context.key, new Set());
@@ -285,7 +347,7 @@ function trackProtectedProcess(context, process) {
   };
   process.once('close', remove);
   process.once('error', remove);
-  if (!instagramAuth.isCurrent(context)) void terminateConverter(process);
+  if (!instagramAuth.isCurrent(context) && !youtubeAuth.isCurrent(context)) void terminateConverter(process);
 }
 
 function terminateConverter(child) {
@@ -345,10 +407,35 @@ async function revokeInstagramConnection(context) {
   for (const job of revokedJobs) removeJobFiles(job);
 }
 
+async function revokeYouTubeConnection(context) {
+  const terminating = [...(protectedProcesses.get(context.key) || [])].map(terminateConverter);
+  const revokedJobs = [];
+  for (const [id, job] of jobs) {
+    if (job.youtubeContext?.key !== context.key) continue;
+    job.revoked = true;
+    revokedJobs.push(job);
+    for (const stream of job.streams || []) stream.destroy();
+    removeJobFiles(job);
+    jobs.delete(id);
+  }
+  await Promise.allSettled(terminating);
+  for (const job of revokedJobs) removeJobFiles(job);
+}
+
 function canReadJob(req, job) {
-  if (!job.instagramContext) return true;
-  const current = instagramAuth.getContext(req);
-  return current?.key === job.instagramContext.key && instagramAuth.isCurrent(current);
+  if (job.youtubeDeviceId) {
+    const device = youtubePairing.device(req, { requireOrigin: !['GET', 'HEAD'].includes(req.method) });
+    if (!device || device.id !== job.youtubeDeviceId) return false;
+  } else if (job.youtubeBrowser && !isYouTubeLocalRequest(req)) return false;
+  if (job.instagramContext) {
+    const current = instagramAuth.getContext(req);
+    return current?.key === job.instagramContext.key && instagramAuth.isCurrent(current);
+  }
+  if (job.youtubeContext) {
+    const current = youtubeAuth.getContext();
+    return current?.key === job.youtubeContext.key && youtubeAuth.isCurrent(current);
+  }
+  return true;
 }
 
 function formatDuration(seconds) {
@@ -372,9 +459,9 @@ async function runYtDlp(args, options = {}) {
   return new Promise((resolve, reject) => {
     const proc = spawn(executable, args, {
       windowsHide: true,
-      detached: Boolean(options.instagramContext || options.job) && process.platform !== 'win32',
+      detached: Boolean(options.instagramContext || options.youtubeContext || options.job) && process.platform !== 'win32',
     });
-    trackProtectedProcess(options.instagramContext, proc);
+    trackProtectedProcess(options.instagramContext || options.youtubeContext, proc);
     if (options.job) options.job.process = proc;
     let stdout = '';
     let stderr = '';
@@ -409,7 +496,18 @@ async function runYtDlp(args, options = {}) {
 }
 
 function getInfoCacheKey(provider, url) {
-  return `${provider.name}:${provider.normalizeUrl(url)}`;
+  return `${provider.name}:${provider.browser || 'public'}:${provider.normalizeUrl(url)}`;
+}
+
+function configureRequestProvider(provider, youtubeBrowser, youtubeCookiesFile = null) {
+  return provider?.name === 'youtube'
+    ? new YouTubeProvider({
+      browser: youtubeBrowser,
+      cookiesFile: youtubeCookiesFile,
+      denoPath: LOCAL_DENO_PATH,
+      nodePath: LOCAL_NODE_PATH,
+    })
+    : provider;
 }
 
 function readCachedInfo(cacheKey) {
@@ -438,16 +536,18 @@ function cacheInfo(cacheKey, value, ttl = INFO_CACHE_TTL_MS) {
   }
 }
 
-async function getVideoInfo(provider, url, instagramContext = null, job = null) {
+async function getVideoInfo(provider, url, instagramContext = null, job = null, youtubeContext = null) {
   assertJobActive(job);
   assertInstagramConnection(instagramContext);
+  assertYouTubeConnection(youtubeContext);
   const normalizedUrl = provider.normalizeUrl(url);
   const storySource = provider.name === 'instagram' ? getInstagramStorySource(normalizedUrl) : null;
   const cacheKey = getInfoCacheKey(provider, normalizedUrl);
-  const cached = instagramContext ? null : readCachedInfo(cacheKey);
+  const privateExtraction = Boolean(instagramContext || provider.usesLocalSession);
+  const cached = privateExtraction ? null : readCachedInfo(cacheKey);
   if (cached) return cached;
 
-  const pending = instagramContext || job ? null : pendingInfoRequests.get(cacheKey);
+  const pending = privateExtraction || job ? null : pendingInfoRequests.get(cacheKey);
   if (pending) return pending;
 
   const request = (async () => {
@@ -457,12 +557,18 @@ async function getVideoInfo(provider, url, instagramContext = null, job = null) 
       '--no-warnings',
       ...extractionProvider.getInfoYtDlpArgs({ url: normalizedUrl }),
       normalizedUrl
-    ], { allowPartialPlaylist: provider.name === 'instagram' && !storySource, instagramContext, job });
+    ], {
+      allowPartialPlaylist: provider.name === 'instagram' && !storySource,
+      instagramContext,
+      youtubeContext,
+      job,
+    });
     const raw = instagramContext
       ? await instagramAuth.withCookieFile(instagramContext, cookiesFile => extract(new InstagramProvider({ cookiesFile })))
       : await extract(provider);
     assertJobActive(job);
     assertInstagramConnection(instagramContext);
+    assertYouTubeConnection(youtubeContext);
     const parsedVideos = storySource ? parseInstagramStoryVideos(raw) : parseVideoInfoCollection(raw);
     const extractedVideos = instagramContext ? parsedVideos : await provider.enrichVideoInfos(parsedVideos, { url: normalizedUrl });
     const videos = extractedVideos.map((info, index) => {
@@ -494,11 +600,11 @@ async function getVideoInfo(provider, url, instagramContext = null, job = null) 
     // Active stories can expire or be added while a profile is open.
     // Authenticated metadata never enters the shared cache or request pool.
     assertJobActive(job);
-    if (!instagramContext) cacheInfo(cacheKey, value, storySource ? 30_000 : INFO_CACHE_TTL_MS);
+    if (!privateExtraction) cacheInfo(cacheKey, value, storySource ? 30_000 : INFO_CACHE_TTL_MS);
     return value;
   })();
 
-  if (instagramContext || job) return request;
+  if (privateExtraction || job) return request;
   pendingInfoRequests.set(cacheKey, request);
   try {
     return await request;
@@ -511,19 +617,51 @@ async function getVideoInfo(provider, url, instagramContext = null, job = null) 
 
 // ─── POST /api/info — Obtener metadata del video ───────────────────────────────
 app.post('/api/info', async (req, res) => {
+  let provider = null;
   try {
-    const { url } = req.body;
+    const { url, youtubeBrowser } = req.body;
 
-    const provider = platformRegistry.findByUrl(url);
-    if (!provider) {
+    const baseProvider = platformRegistry.findByUrl(url);
+    if (!baseProvider) {
       return res.status(400).json({ error: 'URL de YouTube, X, Instagram, TikTok, Reddit o Twitch no válida' });
     }
+    if (baseProvider.name === 'youtube' && youtubeBrowser && !isYouTubeLocalRequest(req, { requireOrigin: true })
+        && !youtubePairing.device(req, { requireOrigin: true })) {
+      return res.status(403).json({ code: 'YOUTUBE_LOCAL_ONLY', error: 'La sesión de YouTube solo está disponible desde Downlink en este ordenador.' });
+    }
+    provider = configureRequestProvider(baseProvider, youtubeBrowser);
 
     const context = provider.name === 'instagram' ? instagramAuth.getContext(req) : null;
+    const youtubeContext = provider.name === 'youtube' && provider.browser === 'chrome'
+      ? youtubeAuth.getContext()
+      : null;
+    if (provider.name === 'youtube' && provider.browser === 'chrome' && !youtubeContext) {
+      throw Object.assign(new Error('Conecta Chrome desde Sesión de YouTube antes de analizar el enlace.'), {
+        code: 'YOUTUBE_CHROME_SESSION_REQUIRED', status: 401,
+      });
+    }
     res.setHeader('Cache-Control', 'no-store');
-    res.json(await getVideoInfo(provider, url, context));
+    const info = youtubeContext
+      ? await youtubeAuth.withCookieFile(youtubeContext, cookiesFile => getVideoInfo(
+        configureRequestProvider(baseProvider, 'chrome', cookiesFile),
+        url,
+        context,
+        null,
+        youtubeContext,
+      ))
+      : await getVideoInfo(provider, url, context);
+    res.json(info);
   } catch (err) {
-    console.error('Error fetching info:', instagramAuth.getContext(req) ? (err.code || 'Instagram extraction failed') : err.message);
+    const youtubeError = getYouTubeError(err, { browser: provider?.browser });
+    console.error('Error fetching info:', instagramAuth.getContext(req)
+      ? (err.code || 'Instagram extraction failed')
+      : (youtubeError?.code || err.message));
+    if (youtubeError && platformRegistry.findByUrl(req.body?.url)?.name === 'youtube') {
+      return res.status(youtubeError.status).json({ code: youtubeError.code, error: youtubeError.error });
+    }
+    if (provider?.name === 'youtube') {
+      return res.status(500).json({ code: 'YOUTUBE_UNKNOWN', error: 'No se pudo analizar el vídeo. YouTube no ha indicado una causa reconocible; abre el enlace en YouTube y vuelve a intentarlo.' });
+    }
     if (err.code === 'INSTAGRAM_SESSION_EXPIRED') {
       return res.status(401).json({ code: err.code, error: err.message });
     }
@@ -537,11 +675,35 @@ app.post('/api/info', async (req, res) => {
 
 // ─── POST /api/download — Iniciar descarga en background ───────────────────────
 app.post('/api/download', async (req, res) => {
-  const { url, format, quality, playlistItem, videoId } = req.body;
+  const { url, format, quality, playlistItem, videoId, youtubeBrowser } = req.body;
 
-  const provider = platformRegistry.findByUrl(url);
-  if (!provider) {
+  const baseProvider = platformRegistry.findByUrl(url);
+  if (!baseProvider) {
     return res.status(400).json({ error: 'URL de YouTube, X, Instagram, TikTok, Reddit o Twitch no válida' });
+  }
+  if (baseProvider.name === 'youtube' && youtubeBrowser && !isYouTubeLocalRequest(req, { requireOrigin: true })
+      && !youtubePairing.device(req, { requireOrigin: true })) {
+    return res.status(403).json({ code: 'YOUTUBE_LOCAL_ONLY', error: 'La sesión de YouTube solo está disponible desde Downlink en este ordenador.' });
+  }
+  let provider;
+  try {
+    provider = configureRequestProvider(baseProvider, youtubeBrowser);
+  } catch (error) {
+    const youtubeError = getYouTubeError(error);
+    return res.status(youtubeError?.status || 400).json({
+      code: youtubeError?.code || 'YOUTUBE_BROWSER_INVALID',
+      error: youtubeError?.error || 'La configuración local de YouTube no es válida.',
+    });
+  }
+
+  const youtubeContext = provider.name === 'youtube' && provider.browser === 'chrome'
+    ? youtubeAuth.getContext()
+    : null;
+  if (provider.name === 'youtube' && provider.browser === 'chrome' && !youtubeContext) {
+    return res.status(401).json({
+      code: 'YOUTUBE_CHROME_SESSION_REQUIRED',
+      error: 'Conecta Chrome desde Sesión de YouTube antes de iniciar la descarga.',
+    });
   }
 
   if (!format || !['mp3', 'mp4'].includes(format)) {
@@ -585,6 +747,10 @@ app.post('/api/download', async (req, res) => {
     playlistItem: selectedPlaylistItem,
     videoId: storySource ? videoId : null,
     isInstagramStory: Boolean(storySource),
+    platform: provider.name,
+    youtubeBrowser: provider.name === 'youtube' ? provider.browser : null,
+    youtubeDeviceId: provider.name === 'youtube' && provider.browser ? youtubePairing.device(req, { requireOrigin: true })?.id || null : null,
+    youtubeContext,
     instagramContext: provider.name === 'instagram' ? instagramAuth.getContext(req) : null,
     url: provider.normalizeUrl(url),
     filename: null,
@@ -612,8 +778,13 @@ async function startDownloadJob(job) {
     assertJobActive(job);
     if (job.instagramContext) {
       await instagramAuth.withCookieFile(job.instagramContext, cookiesFile => performDownloadJob(job, new InstagramProvider({ cookiesFile })));
+    } else if (job.youtubeContext) {
+      await youtubeAuth.withCookieFile(job.youtubeContext, cookiesFile => performDownloadJob(
+        job,
+        configureRequestProvider(platformRegistry.findByUrl(job.url), job.youtubeBrowser, cookiesFile),
+      ));
     } else {
-      await performDownloadJob(job, platformRegistry.findByUrl(job.url));
+      await performDownloadJob(job, configureRequestProvider(platformRegistry.findByUrl(job.url), job.youtubeBrowser));
     }
   } catch (error) {
     failDownloadJob(job, error);
@@ -628,7 +799,7 @@ function runJobProcess(job, executable, args, label) {
       windowsHide: true,
       detached: process.platform !== 'win32',
     });
-    trackProtectedProcess(job.instagramContext, proc);
+    trackProtectedProcess(job.instagramContext || job.youtubeContext, proc);
     job.process = proc;
     let stderr = '';
     const parseFfmpegProgress = createFfmpegProgressParser({ duration: job.duration });
@@ -665,7 +836,7 @@ async function performDownloadJob(job, provider) {
     // 1. Obtener título
     console.log(`[Job ${job.id.slice(0, 8)}] Starting: format=${job.format}, quality=${job.quality}`);
     assertInstagramConnection(job.instagramContext);
-    const info = await getVideoInfo(provider, job.url, job.instagramContext, job);
+    const info = await getVideoInfo(provider, job.url, job.instagramContext, job, job.youtubeContext);
     assertJobActive(job);
     const selectedVideoIndex = Array.isArray(info.videos)
       ? info.videos.findIndex(video => video.playlistItem === job.playlistItem)
@@ -861,9 +1032,13 @@ function failDownloadJob(job, err) {
 
   console.error(`[Job ${job.id.slice(0, 8)}] Error:`, job.instagramContext ? (err.code || 'Instagram download failed') : err.message);
   job.status = 'error';
-  job.error = err.code === 'INSTAGRAM_SESSION_EXPIRED' ? err.message : (job.isInstagramStory || job.instagramContext)
+  const youtubeError = job.platform === 'youtube' ? getYouTubeError(err, { browser: job.youtubeBrowser }) : null;
+  job.errorCode = youtubeError?.code || null;
+  job.error = youtubeError?.error || (job.platform === 'youtube'
+    ? 'No se pudo preparar este vídeo. YouTube o el conversor no han indicado una causa reconocible; comprueba el enlace y vuelve a intentarlo.'
+    : err.code === 'INSTAGRAM_SESSION_EXPIRED' ? err.message : (job.isInstagramStory || job.instagramContext)
     ? getInstagramStoryError(err).error
-    : (err.message || 'Error al descargar. Verifica que yt-dlp y ffmpeg estén instalados.');
+    : (err.message || 'Error al descargar. Verifica que yt-dlp y ffmpeg estén instalados.'));
   job.process = null;
 
   // Limpiar archivos parciales
@@ -977,7 +1152,8 @@ app.get('/api/status/:jobId', (req, res) => {
     progressDetail: job.progressDetail,
     filename: job.filename,
     format: job.format,
-    error: job.error
+    error: job.error,
+    code: job.errorCode || null,
   });
 });
 
@@ -1112,6 +1288,18 @@ setInterval(() => {
 }, 10 * 60 * 1000); // Cada 10 min
 
 // ─── Iniciar servidor ───────────────────────────────────────────────────────────
+if (iosLanConfig) {
+  try {
+    const secureServer = https.createServer({ pfx: iosLanConfig.pfx, passphrase: iosLanConfig.passphrase, minVersion: 'TLSv1.2' }, app);
+    secureServer.on('error', error => console.error(`No se pudo iniciar la conexión segura para iPhone: ${error.code || 'error'}`));
+    secureServer.listen(iosLanConfig.port, iosLanConfig.host, () => {
+      console.log(`Conexión segura para iPhone: ${iosLanConfig.origin}`);
+    });
+  } catch {
+    console.error('No se pudo abrir el certificado de la conexión segura para iPhone.');
+  }
+}
+
 app.listen(PORT, HOST, () => {
   // Prepare/download the extractor before the first user submits a link.
   void warmYtDlp();
@@ -1137,6 +1325,9 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
       job.cancelled = true;
       if (job.process) void terminateConverter(job.process);
     }
-    void instagramAuth.dispose().finally(() => process.exit(0));
+    void Promise.allSettled([
+      instagramAuth.dispose(),
+      youtubeAuth.dispose(),
+    ]).finally(() => process.exit(0));
   });
 }

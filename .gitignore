@@ -3,6 +3,7 @@ bin/
 downloads/
 /Microsoft/
 secrets/
+/public/downlink-local-ca.cer
 *.cookies.txt
 cookies.txt
 .env

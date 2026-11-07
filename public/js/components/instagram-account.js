@@ -1,4 +1,5 @@
 import { apiFetch, isNativeApp } from '@/public/js/platform.js';
+import { animateOverlayEntrance, cancelOverlayEntrance } from '@/public/js/components/overlay-motion.js';
 
 const SESSION_ENDPOINT = '/api/instagram/session';
 const ACCOUNT_ENDPOINT = '/api/instagram/';
@@ -55,32 +56,32 @@ export function initializeInstagramAccount({ onChange } = {}) {
   }
 
   function connectedDescription() {
-    const description = 'La sesión está conectada. El acceso a cada vídeo depende de los permisos de tu cuenta y de su disponibilidad.';
+    const description = 'Acceso según los permisos de tu cuenta.';
     const expiry = session.expiresAt ? new Date(session.expiresAt) : null;
     if (!expiry || !Number.isFinite(expiry.getTime())) {
-      return `${description} Puedes desconectarla cuando quieras.`;
+      return description;
     }
     const time = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' }).format(expiry);
-    return `${description} La conexión caduca a las ${time}.`;
+    return `${description} Caduca a las ${time}.`;
   }
 
   function connectionPresentation() {
     if (!loaded) {
-      return { state: 'loading', label: 'Comprobando conexión…', title: 'Cuenta de Instagram.' };
+      return { state: 'loading', label: 'Comprobando conexión…', title: 'Conectar Instagram' };
     }
     if (session.connected) {
-      return { state: 'connected', label: 'Conectada', title: 'Instagram está conectado.' };
+      return { state: 'connected', label: 'Conectada', title: 'Instagram conectado' };
     }
     if (session.pending) {
-      return { state: 'pending', label: 'Inicio de sesión pendiente', title: 'Termina de conectar Instagram.' };
+      return { state: 'pending', label: 'Inicio de sesión pendiente', title: 'Conectar Instagram' };
     }
     if (session.available === false) {
-      return { state: 'unavailable', label: 'No disponible en este equipo', title: 'Conexión no disponible.' };
+      return { state: 'unavailable', label: 'No disponible en este equipo', title: 'Conectar Instagram' };
     }
     if (session.available === null) {
-      return { state: 'error', label: 'No se pudo comprobar', title: 'No se pudo comprobar la conexión.' };
+      return { state: 'error', label: 'No se pudo comprobar', title: 'Conectar Instagram' };
     }
-    return { state: 'disconnected', label: 'No conectada', title: 'Conecta Instagram.' };
+    return { state: 'disconnected', label: 'No conectada', title: 'Conectar Instagram' };
   }
 
   function render() {
@@ -99,18 +100,18 @@ export function initializeInstagramAccount({ onChange } = {}) {
     setText(title, connection.title);
     setText(description, session.connected
       ? connectedDescription()
-      : `Inicia sesión directamente en Instagram. Tu sesión se guardará temporalmente en ${isNativeApp() ? 'este dispositivo' : 'este equipo'} para descargar vídeos que tu cuenta pueda ver.`);
+      : 'Accede a vídeos y stories que tu cuenta pueda ver.');
 
     let status = notice;
-    if (!loaded) status = 'Comprobando la conexión…';
-    else if (session.available === false) status = 'La conexión está disponible al abrir la aplicación en el equipo donde se ejecuta.';
+    if (!loaded) status = '';
+    else if (session.available === false) status = 'Abre Downlink en el equipo donde se ejecuta para conectar tu cuenta.';
     else if (operation === 'login/start') status = isNativeApp() ? 'Abriendo Instagram…' : 'Abriendo una pestaña de Instagram…';
     else if (operation === 'login/capture') status = 'Recuperando la sesión desde la pestaña de Instagram…';
     else if (operation === 'login/complete') status = 'Comprobando tu inicio de sesión…';
     else if (operation === 'disconnect') status = 'Desconectando tu cuenta…';
     else if (session.pending) status = isNativeApp()
       ? 'Completa el inicio de sesión en Instagram y confirma la conexión.'
-      : 'Completa el inicio de sesión en Instagram. Al volver a esta pestaña comprobaremos la conexión automáticamente.';
+      : 'Inicia sesión en Instagram. Al volver aquí comprobaremos la conexión automáticamente.';
     setText(stateMessage, status);
     stateMessage.hidden = !status;
 
@@ -368,6 +369,7 @@ export function initializeInstagramAccount({ onChange } = {}) {
     closeRequested = true;
     stopPolling();
     if (dialog.open && !dialog.classList.contains('is-closing')) {
+      cancelOverlayEntrance(dialog);
       const finishClose = () => {
         closeTimer = null;
         dialog.classList.remove('is-closing');
@@ -396,7 +398,8 @@ export function initializeInstagramAccount({ onChange } = {}) {
     showError();
     render();
     dialog.showModal();
-    title.focus();
+    animateOverlayEntrance(dialog);
+    title.focus({ preventScroll: true });
     await refresh();
     schedulePolling();
   }
@@ -419,6 +422,7 @@ export function initializeInstagramAccount({ onChange } = {}) {
     if (outside) close();
   });
   dialog.addEventListener('close', () => {
+    cancelOverlayEntrance(dialog);
     window.clearTimeout(closeTimer);
     closeTimer = null;
     dialog.classList.remove('is-closing');

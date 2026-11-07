@@ -1,3 +1,5 @@
+import { animateOverlayEntrance, cancelOverlayEntrance } from '@/public/js/components/overlay-motion.js';
+
 export function initializeOptionsMenu() {
   // Retire local profile data without touching downloads or Instagram sessions.
   try {
@@ -12,15 +14,18 @@ export function initializeOptionsMenu() {
 
   const items = () => [...menu.querySelectorAll('[role="menuitem"]:not(:disabled)')];
   function close(restoreFocus = false) {
+    cancelOverlayEntrance(menu);
     menu.hidden = true;
     button.setAttribute('aria-expanded', 'false');
     control.classList.remove('is-open');
     if (restoreFocus) button.focus({ preventScroll: true });
   }
   function open(last = false) {
+    const opening = menu.hidden;
     menu.hidden = false;
     button.setAttribute('aria-expanded', 'true');
     control.classList.add('is-open');
+    if (opening) animateOverlayEntrance(menu, { menu: true });
     const choices = items();
     (last ? choices.at(-1) : choices[0])?.focus({ preventScroll: true });
   }

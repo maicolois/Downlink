@@ -106,6 +106,17 @@
         </svg>
       </button>
       <div id="optionsMenu" class="options-menu" role="menu" aria-labelledby="optionsMenuButton" hidden>
+        <button id="youtubeAccountButton" class="options-menu__item" type="button" role="menuitem" tabindex="-1"
+          aria-haspopup="dialog" aria-controls="youtubeAccountDialog" aria-label="Sesión de YouTube: no activada">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.8V8.2l6.4 3.8-6.4 3.8Z"/>
+          </svg>
+          <span class="options-menu__copy">
+            <span>Sesión de YouTube</span>
+            <small id="youtubeAccountLabel">No activada</small>
+          </span>
+          <span class="options-menu__connection-dot" aria-hidden="true"></span>
+        </button>
         <button id="instagramAccountButton" class="options-menu__item" type="button" role="menuitem" tabindex="-1"
           aria-haspopup="dialog" aria-controls="instagramAccountDialog" aria-label="Conectar Instagram: comprobando conexión">
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -214,6 +225,7 @@
           <path d="M5 19h14a2 2 0 0 0 1.84 -2.75l-7.1 -12.25a2 2 0 0 0 -3.5 0l-7.1 12.25a2 2 0 0 0 1.75 2.75" />
         </svg>
         <span id="errorText"></span>
+        <button id="youtubeAuthAction" class="error-message__action" type="button" aria-label="Conectar cuenta de YouTube" hidden>Conectar</button>
       </div>
     </section>
 
@@ -401,7 +413,7 @@
 
   </div>
 
-  <dialog id="instagramAccountDialog" class="instagram-dialog" aria-labelledby="instagramAccountTitle" aria-describedby="instagramAccountDescription">
+  <dialog id="instagramAccountDialog" class="instagram-dialog instagram-account-dialog account-dialog--compact" aria-labelledby="instagramAccountTitle" aria-describedby="instagramAccountDescription">
     <div class="instagram-dialog__glow" aria-hidden="true"></div>
     <div class="instagram-dialog__page">
       <button id="instagramAccountClose" class="instagram-dialog__close" type="button" aria-label="Cerrar">
@@ -418,19 +430,14 @@
             </svg>
           </div>
           <div>
-            <p class="instagram-dialog__eyebrow">Tu cuenta de Instagram</p>
-            <h2 id="instagramAccountTitle" class="instagram-dialog__title" tabindex="-1">Cuenta de Instagram.</h2>
-            <p id="instagramAccountDescription" class="instagram-dialog__description">Inicia sesión directamente en Instagram. Tu sesión se guardará temporalmente en este equipo para descargar vídeos que tu cuenta pueda ver.</p>
+            <h2 id="instagramAccountTitle" class="instagram-dialog__title" tabindex="-1">Conectar Instagram</h2>
+            <div class="instagram-dialog__connection" aria-live="polite">
+              <span class="instagram-dialog__connection-dot" aria-hidden="true"></span>
+              <strong id="instagramAccountConnectionStatus">Comprobando conexión…</strong>
+            </div>
           </div>
         </div>
-
-        <div class="instagram-dialog__connection" aria-live="polite">
-          <span class="instagram-dialog__connection-dot" aria-hidden="true"></span>
-          <span>
-            <small>Estado de la conexión</small>
-            <strong id="instagramAccountConnectionStatus">Comprobando conexión…</strong>
-          </span>
-        </div>
+        <p id="instagramAccountDescription" class="instagram-dialog__description">Accede a vídeos y stories que tu cuenta pueda ver.</p>
 
         <p id="instagramAccountState" class="instagram-dialog__state" role="status" aria-live="polite" hidden></p>
         <p id="instagramAccountError" class="instagram-dialog__error" role="alert" hidden></p>
@@ -446,7 +453,73 @@
             <path d="M12 3 5 6v5c0 4.6 2.8 8.7 7 10 4.2-1.3 7-5.4 7-10V6l-7-3Z"/>
             <path d="m9 12 2 2 4-4"/>
           </svg>
-          <span><strong>Sesión temporal y privada.</strong> Las stories privadas deben ser visibles para tu cuenta.</span>
+          <span>Sesión temporal y privada. Tu contraseña se queda en Instagram.</span>
+        </div>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog id="youtubeAccountDialog" class="instagram-dialog youtube-account-dialog account-dialog--compact" aria-labelledby="youtubeAccountTitle" aria-describedby="youtubeAccountDescription">
+    <div class="instagram-dialog__glow" aria-hidden="true"></div>
+    <div class="instagram-dialog__page">
+      <button id="youtubeAccountClose" class="instagram-dialog__close" type="button" aria-label="Cerrar">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+
+      <section class="instagram-dialog__content">
+        <div class="instagram-dialog__heading">
+          <div class="instagram-dialog__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.8V8.2l6.4 3.8-6.4 3.8Z"/></svg>
+          </div>
+          <div>
+            <h2 id="youtubeAccountTitle" class="instagram-dialog__title" tabindex="-1">Conectar YouTube</h2>
+            <div class="instagram-dialog__connection" aria-live="polite">
+              <span class="instagram-dialog__connection-dot" aria-hidden="true"></span>
+              <strong id="youtubeAccountConnectionStatus">Ninguna cuenta conectada</strong>
+            </div>
+          </div>
+        </div>
+        <p id="youtubeAccountDescription" class="instagram-dialog__description">Para vídeos que requieren tu cuenta.</p>
+
+        <div id="youtubeBrowserNotice" class="instagram-dialog__state youtube-account-notice" role="status" aria-live="polite" aria-atomic="true">
+          <svg class="youtube-account-notice__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 7.5v5M12 16h.01"/>
+          </svg>
+          <span id="youtubeBrowserNoticeText"></span>
+        </div>
+        <details id="youtubeBridgeHelp" class="youtube-bridge-help">
+          <summary aria-controls="youtubeBridgeHelpContent">Instalar la extensión</summary>
+          <div id="youtubeBridgeHelpContent" class="youtube-bridge-help__content" data-disclosure-content>
+            <p data-extension-compatibility hidden></p>
+            <ol>
+              <li>Abre <strong data-extension-url>chrome://extensions</strong> y activa <strong>Modo de desarrollador</strong>.</li>
+              <li><strong data-extension-load>Cargar descomprimida</strong>: elige <strong>browser-extension/youtube-bridge</strong> de Downlink.</li>
+              <li>Recarga Downlink y pulsa <strong>Conectar YouTube</strong>.</li>
+            </ol>
+          </div>
+        </details>
+        <div id="youtubePairingPanel" class="youtube-pairing" hidden>
+          <p id="youtubePairingInstructions">Introduce el código que aparece en Downlink en el ordenador.</p>
+          <label id="youtubePairingLabel" for="youtubePairingInput">Código de vinculación</label>
+          <input id="youtubePairingInput" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="00000000">
+          <button id="youtubePairingScan" class="instagram-dialog__button" type="button" hidden>Escanear QR</button>
+          <video id="youtubePairingCamera" autoplay muted playsinline hidden></video>
+          <img id="youtubePairingQr" alt="Código QR para vincular el iPhone" width="200" height="200" hidden>
+          <output id="youtubePairingCode" aria-live="polite" hidden></output>
+        </div>
+        <div class="instagram-dialog__actions">
+          <button id="youtubeBrowserEnable" class="instagram-dialog__button instagram-dialog__button--primary" type="button">Conectar YouTube</button>
+          <button id="youtubePairingStart" class="instagram-dialog__button" type="button" hidden>Vincular iPhone</button>
+          <button id="youtubeBrowserDisable" class="instagram-dialog__button instagram-dialog__button--danger" type="button" hidden>No usar cuenta</button>
+        </div>
+
+        <div class="instagram-dialog__privacy">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3 5 6v5c0 4.6 2.8 8.7 7 10 4.2-1.3 7-5.4 7-10V6l-7-3Z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+          <span id="youtubePrivacyText">Sesión local. Tu contraseña no sale del navegador.</span>
         </div>
       </section>
     </div>

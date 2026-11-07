@@ -1,19 +1,23 @@
 // Bump this version whenever the app shell changes. Updates activate after the
 // existing windows close, so an in-progress download is never forcibly reloaded.
-const CACHE = 'downlink-shell-v15';
+const CACHE = 'downlink-shell-v44';
 const SHELL = [
   '/', '/index.html', '/manifest.webmanifest',
   '/css/main.css', '/css/options-menu.css', '/css/pwa.css',
   '/js/app.js', '/js/platform.js', '/js/pwa.js', '/js/download-session.js',
   '/js/homepage.js', '/js/fetch-with-retry.js',
-  '/js/components/options-menu.js', '/js/components/instagram-account.js',
+  '/js/components/options-menu.js', '/js/components/instagram-account.js', '/js/components/youtube-account.js',
+  '/js/components/overlay-motion.js',
+  '/js/components/disclosure-motion.js',
+  '/js/components/qr-scanner.js',
+  '/js/components/youtube-extension-help.js',
   '/js/components/input-placeholder.js', '/js/components/quality-grid.js',
   '/js/backgrounds/contour-background.js',
   '/shared/platform-patterns.js', '/shared/video-resolutions.js',
   '/shared/carousel-selection.js', '/shared/instagram-stories.js', '/shared/mp3-qualities.js',
   '/assets/icons/favicon.svg', '/assets/icons/apple-touch-icon.png',
   '/assets/icons/app-192.png', '/assets/icons/app-512.png', '/assets/icons/app-maskable-512.png',
-  '/assets/graphics/contours-fallback.png',
+  '/assets/graphics/contours-fallback.png', '/assets/graphics/contours.svg',
 ];
 
 self.addEventListener('install', event => {

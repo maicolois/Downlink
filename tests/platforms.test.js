@@ -87,10 +87,11 @@ test('normalizes canonical TikTok links without modifying shortened links', () =
   assert.equal(provider.normalizeUrl('https://vm.tiktok.com/ABC/?k=1'), 'https://vm.tiktok.com/ABC/?k=1');
 });
 
-test('YouTube metadata skips manifests without changing download extraction', () => {
+test('YouTube metadata skips manifests without adding account access by default', () => {
   const provider = new YouTubeProvider();
-  assert.deepEqual(provider.getInfoYtDlpArgs(), ['--extractor-args', 'youtube:skip=hls,dash']);
-  assert.deepEqual(provider.getYtDlpArgs(), []);
+  assert.deepEqual(provider.getInfoYtDlpArgs(), ['--ignore-config', '--extractor-args', 'youtube:skip=hls,dash']);
+  assert.deepEqual(provider.getYtDlpArgs(), ['--ignore-config']);
+  assert.equal(provider.usesLocalSession, false);
 });
 
 test('Instagram metadata and download select a single carousel entry', () => {

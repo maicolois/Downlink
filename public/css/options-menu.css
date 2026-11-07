@@ -30,7 +30,6 @@
   color: rgba(255, 255, 255, 0.94);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 .options-control__button svg {
@@ -43,10 +42,6 @@
 .options-control.is-open .options-control__button {
   border-color: rgba(255, 255, 255, 0.38);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 8px 28px rgba(0, 0, 0, 0.3);
-}
-
-.options-control__button:active {
-  transform: scale(0.96);
 }
 
 .options-control__button:focus-visible,
@@ -67,8 +62,12 @@
   max-width: calc(100vw - 28px - env(safe-area-inset-left) - env(safe-area-inset-right));
   padding: 7px;
   border-radius: 22px;
-  transform-origin: top right;
-  animation: options-menu-in 160ms ease-out;
+  border-color: var(--glass-border);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012)),
+    rgba(13, 14, 17, 0.94);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), var(--glass-shadow);
+  transform-origin: calc(100% - 22px) -12px;
 }
 
 .options-menu__item {
@@ -100,9 +99,14 @@
 }
 
 .options-menu__item > svg {
-  flex: 0 0 22px;
-  width: 22px;
-  height: 22px;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 11px;
+  background: linear-gradient(135deg, #30343b, #202329);
+  color: #d4d7df;
 }
 
 .options-menu__copy {
@@ -130,15 +134,522 @@
   box-shadow: 0 0 10px rgba(141, 217, 178, 0.3);
 }
 
-@keyframes options-menu-in {
-  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+.youtube-account-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.youtube-account-notice__icon {
+  display: none;
+  flex: 0 0 17px;
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  color: #d9b879;
+}
+
+.youtube-account-notice.is-error {
+  padding: 12px 14px;
+  border: 1px solid rgba(217, 184, 121, 0.18);
+  border-radius: 14px;
+  background: rgba(217, 184, 121, 0.055);
+  color: #d2c5ad;
+  animation: youtube-notice-in 220ms ease-out;
+}
+
+.youtube-account-notice.is-error .youtube-account-notice__icon {
+  display: block;
+}
+
+.youtube-account-dialog[data-connection-state="error"] .instagram-dialog__connection-dot {
+  background: #d9b879;
+  box-shadow: 0 0 0 5px rgba(217, 184, 121, 0.1);
+}
+
+.youtube-account-dialog[data-connection-state="error"] .instagram-dialog__connection strong {
+  color: #d9b879;
+}
+
+@keyframes youtube-notice-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.youtube-bridge-help {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #a4a4ad;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.account-dialog--compact {
+  width: min(560px, calc(100vw - 32px));
+  max-width: 560px;
+}
+
+.account-dialog--compact .instagram-dialog__page {
+  padding: 24px;
+  scrollbar-gutter: auto;
+  overflow-anchor: none;
+}
+
+.account-dialog--compact .instagram-dialog__heading {
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  padding-right: 40px;
+}
+
+.account-dialog--compact .instagram-dialog__mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+}
+
+.account-dialog--compact .instagram-dialog__title {
+  font-size: 1.35rem;
+  text-wrap: initial;
+}
+
+.account-dialog--compact .instagram-dialog__connection {
+  gap: 9px;
+  margin-top: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.account-dialog--compact .instagram-dialog__connection strong {
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.account-dialog--compact .instagram-dialog__connection-dot {
+  width: 6px;
+  height: 6px;
+  margin-left: 3px;
+}
+
+.account-dialog--compact .instagram-dialog__description {
+  margin-top: 12px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.youtube-account-dialog .youtube-account-notice {
+  margin-top: 10px;
+  line-height: 1.4;
+}
+
+.youtube-account-dialog .youtube-account-notice.is-error {
+  padding: 9px 11px;
+}
+
+.account-dialog--compact .instagram-dialog__actions {
+  margin-top: 14px;
+  gap: 8px;
+}
+
+.account-dialog--compact .instagram-dialog__actions:has(button:not([hidden]) ~ button:not([hidden])) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-dialog--compact .instagram-dialog__button {
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 0.86rem;
+}
+
+.account-dialog--compact .instagram-dialog__privacy {
+  align-items: center;
+  margin-top: 12px;
+  padding: 10px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.account-dialog--compact .instagram-dialog__close {
+  top: 16px;
+  right: 16px;
+}
+
+.account-dialog--compact .instagram-dialog__state,
+.account-dialog--compact .instagram-dialog__error {
+  margin-top: 10px;
+  line-height: 1.4;
+}
+
+.account-dialog--compact .instagram-dialog__error {
+  padding: 9px 11px;
+  border-radius: 14px;
+}
+
+.account-dialog--compact .instagram-dialog__actions:not(:has(button:not([hidden]))) {
+  display: none;
+}
+
+.youtube-bridge-help__content {
+  display: flow-root;
+}
+
+.youtube-bridge-help summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 17px;
+  list-style: none;
+  cursor: pointer;
+  color: #e3e1eb;
+  font-weight: 500;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.youtube-bridge-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.youtube-bridge-help summary::after {
+  content: '';
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  margin-right: 3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 340ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.youtube-bridge-help[data-expanded="true"] summary::after,
+.youtube-bridge-help[open]:not([data-expanded]) summary::after {
+  transform: rotate(225deg);
+}
+
+.youtube-bridge-help summary:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.youtube-bridge-help summary:focus-visible {
+  outline: 2px solid #f5f5f7;
+  outline-offset: -3px;
+}
+
+.youtube-pairing {
+  display: grid;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.youtube-pairing[hidden] {
+  display: none;
+}
+
+.youtube-pairing input {
+  min-width: 0;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+  font: inherit;
+  letter-spacing: 0.15em;
+}
+
+.youtube-pairing output {
+  color: var(--text-primary);
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+}
+
+.youtube-pairing img {
+  width: min(200px, 100%);
+  height: auto;
+  justify-self: center;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.youtube-pairing video {
+  width: 100%;
+  max-height: 230px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.youtube-bridge-help ol {
+  margin: 0 0 12px;
+  padding: 0 12px 0 28px;
+  line-height: 1.45;
+}
+
+.youtube-bridge-help li + li {
+  margin-top: 6px;
+}
+
+.youtube-bridge-help li::marker {
+  color: #e3e1eb;
+}
+
+.youtube-bridge-help strong {
+  color: #e3e1eb;
+  font-weight: 600;
+}
+
+.youtube-bridge-help__content > p {
+  margin: 0 0 10px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .account-dialog--compact {
+    width: calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  }
+
+  .account-dialog--compact .instagram-dialog__page {
+    padding: 18px;
+  }
+
+  .account-dialog--compact .instagram-dialog__title {
+    font-size: 1.25rem;
+  }
+
+  .account-dialog--compact .instagram-dialog__close {
+    top: 10px;
+    right: 10px;
+  }
+}
+
+@media (max-width: 600px) and (max-height: 650px) {
+  .account-dialog--compact .instagram-dialog__page {
+    padding: 14px;
+  }
+
+  .account-dialog--compact .instagram-dialog__heading {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 10px;
+    padding-right: 44px;
+  }
+
+  .account-dialog--compact .instagram-dialog__mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+  }
+
+  .account-dialog--compact .instagram-dialog__mark svg {
+    width: 23px;
+    height: 23px;
+  }
+
+  .account-dialog--compact .instagram-dialog__description,
+  .account-dialog--compact .instagram-dialog__state,
+  .account-dialog--compact .instagram-dialog__error,
+  .youtube-account-dialog .youtube-account-notice,
+  .account-dialog--compact .instagram-dialog__actions,
+  .account-dialog--compact .instagram-dialog__privacy,
+  .youtube-account-dialog .youtube-bridge-help {
+    margin-top: 8px;
+  }
+
+  .account-dialog--compact .instagram-dialog__privacy {
+    padding-top: 8px;
+  }
+}
+
+/* Short, wide viewports have room for the guide beside the connection controls. */
+@media (min-width: 560px) and (max-height: 600px) {
+  .youtube-account-dialog {
+    --account-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    width: min(780px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    max-width: 780px;
+    margin-block: auto;
+  }
+
+  .youtube-account-dialog .instagram-dialog__page {
+    padding: 18px;
+  }
+
+  .youtube-account-dialog .instagram-dialog__content {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    grid-template-rows: auto auto auto auto auto;
+    gap: 10px 20px;
+    align-items: start;
+  }
+
+  .youtube-account-dialog .instagram-dialog__heading {
+    grid-column: 1 / -1;
+  }
+
+  .youtube-account-dialog .instagram-dialog__description {
+    grid-area: 2 / 1;
+    margin: 0;
+  }
+
+  .youtube-account-dialog .youtube-account-notice {
+    grid-area: 3 / 1;
+    margin: 0;
+  }
+
+  .youtube-account-dialog .instagram-dialog__actions {
+    grid-area: 4 / 1;
+    margin: 0;
+  }
+
+  .youtube-account-dialog .instagram-dialog__privacy {
+    grid-area: 5 / 1;
+    margin: 0;
+  }
+
+  .youtube-account-dialog .youtube-bridge-help {
+    grid-area: 2 / 2 / 6;
+    margin: 0;
+  }
+}
+
+@media (min-width: 560px) and (max-height: 350px) {
+  .youtube-account-dialog {
+    --account-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+
+  .youtube-account-dialog .instagram-dialog__page {
+    padding: 10px;
+  }
+
+  .youtube-account-dialog .instagram-dialog__content {
+    gap: 4px 14px;
+  }
+
+  .youtube-account-dialog .instagram-dialog__heading {
+    grid-column: 1;
+    padding-right: 0;
+  }
+
+  .youtube-account-dialog .youtube-bridge-help {
+    grid-row: 1 / 6;
+  }
+
+  .youtube-account-dialog .youtube-bridge-help summary {
+    padding-right: 48px;
+  }
+
+  .youtube-account-dialog .instagram-dialog__close {
+    top: 6px;
+    right: 6px;
+  }
+}
+
+@media (min-width: 560px) and (max-height: 450px) {
+  .instagram-account-dialog {
+    --account-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    width: min(720px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    max-width: 720px;
+    margin-block: auto;
+  }
+
+  .instagram-account-dialog .instagram-dialog__page {
+    padding: 14px;
+  }
+
+  .instagram-account-dialog .instagram-dialog__content {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 18px;
+    align-items: start;
+  }
+
+  .instagram-account-dialog .instagram-dialog__heading {
+    grid-area: 1 / 1 / 2 / -1;
+  }
+
+  .instagram-account-dialog .instagram-dialog__description {
+    grid-area: 2 / 1;
+    margin: 0;
+  }
+
+  .instagram-account-dialog .instagram-dialog__state {
+    grid-area: 3 / 1;
+    margin: 0;
+  }
+
+  .instagram-account-dialog .instagram-dialog__error {
+    grid-area: 2 / 2 / 4;
+    margin: 0;
+  }
+
+  .instagram-account-dialog .instagram-dialog__actions {
+    grid-area: 4 / 1 / 5 / -1;
+    margin: 0;
+  }
+
+  .instagram-account-dialog .instagram-dialog__privacy {
+    grid-area: 5 / 1 / 6 / -1;
+    margin: 0;
+  }
+
+  .instagram-account-dialog .instagram-dialog__close {
+    top: 8px;
+    right: 8px;
+  }
 }
 
 @media (max-width: 640px) {
   .options-control {
     top: max(14px, env(safe-area-inset-top));
     right: max(14px, env(safe-area-inset-right));
+  }
+
+  /* Keep the two account controls clear of the link field on phone screens. */
+  .options-menu {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px;
+    width: min(340px, calc(100vw - 28px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    padding: 5px;
+  }
+
+  .options-menu__item {
+    min-height: 58px;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .options-menu__item > svg {
+    flex-basis: 30px;
+    width: 30px;
+    height: 30px;
+    padding: 6px;
+    border-radius: 9px;
+  }
+
+  .options-menu__copy {
+    gap: 0;
+  }
+
+  .options-menu__copy > span {
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+
+  .options-menu__copy small {
+    display: none;
   }
 }
 
@@ -150,7 +661,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .options-control__button,
-  .options-menu__item { transition: none; }
-  .options-menu { animation: none; }
+  .options-menu__item,
+  .youtube-bridge-help summary::after { transition: none; }
 }
