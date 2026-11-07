@@ -118,7 +118,7 @@ scripts/                        Node alias loader and Android build/test tooling
 docs/                           Audit, validation, screenshots and maintainer proposals
 ```
 
-Use the npm commands: internal JavaScript imports use the `@/` root alias registered by these scripts. The browser uses the import map in `public/index.html`; editor resolution is in `jsconfig.json`. The older wave background remains in `public/js/backgrounds/wave-background.js`.
+Use the npm commands: internal JavaScript imports use the `@/` root alias registered by these scripts. The browser uses the import map in `public/index.html`; editor resolution is in `jsconfig.json`.
 
 `bin/`, `downloads/`, `node_modules/`, `artifacts/`, signing keys and local configuration are ignored by Git. Keep local downloads and account material out of commits and source archives.
 

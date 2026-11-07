@@ -107,7 +107,7 @@ Los comandos específicos de Android e iOS están en sus guías. Consulta los [r
 
 `public/` contiene la interfaz; `server/`, API y conversión; `shared/`, patrones y configuración compartida. Las carpetas `android/`, `ios/` e `ios-embedded/` mantienen sus implementaciones y pruebas. El puente local está en `browser-extension/instagram-bridge/`; las pruebas Node, en `tests/`; los informes y propuestas, en `docs/`.
 
-Usa los comandos npm para registrar el alias `@/`. La web utiliza el import map de `public/index.html` y el editor, `jsconfig.json`. El fondo anterior sigue disponible en `public/js/backgrounds/wave-background.js`.
+Usa los comandos npm para registrar el alias `@/`. La web utiliza el import map de `public/index.html` y el editor, `jsconfig.json`.
 
 `bin/`, `downloads/`, `node_modules/`, `artifacts/`, las claves de firma y la configuración local están excluidos de Git. No incluyas descargas ni datos de cuenta en commits o archivos de distribución.
 
