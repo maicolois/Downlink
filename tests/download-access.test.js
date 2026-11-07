@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { createDownloadAccess } from '@/server/auth/download-access.js';
+
+test('file access is scoped, expires, requires HTTPS and is revoked with the device or account', () => {
+  let time = 1_000_000;
+  let deviceActive = true;
+  let accountActive = true;
+  const pairing = { isDeviceActive: () => deviceActive, secureRequest: req => req.secure === true };
+  const youtubeAuth = { isCurrent: () => accountActive };
+  const access = createDownloadAccess({ pairing, youtubeAuth, now: () => time });
+  const job = { status: 'ready', youtubeDeviceId: 'device', youtubeContext: { key: 'account', expiresAt: time + 60_000 } };
+  const grant = access.issue(job);
+  assert.match(grant.token, /^[A-Za-z0-9_-]{43}$/);
+  assert.equal(grant.expiresAt, time + 60_000);
+  const request = { secure: true, query: { access: grant.token } };
+  assert.equal(access.permits(request, job), true);
+  assert.equal(access.permits({ ...request, secure: false }, job), false);
+  assert.equal(access.permits({ ...request, query: { access: 'x'.repeat(43) } }, job), false);
+  assert.equal(access.permits(request, { ...job, fileAccess: undefined }), false);
+  deviceActive = false;
+  assert.equal(access.permits(request, job), false);
+  deviceActive = true;
+  accountActive = false;
+  assert.equal(access.permits(request, job), false);
+  accountActive = true;
+  time = grant.expiresAt;
+  assert.equal(access.permits(request, job), false);
+  job.youtubeContext.expiresAt = time + 60_000;
+  assert.notEqual(access.issue(job).token, grant.token);
+});

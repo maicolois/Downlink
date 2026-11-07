@@ -39,6 +39,13 @@ export function createYouTubePairing({ youtubeAuth, origin = null, now = Date.no
     return entry;
   }
 
+  function isDeviceActive(id, contextKey) {
+    const context = youtubeAuth.getContext();
+    if (!context || context.key !== contextKey) return false;
+    return [...devices.values()].some(entry => entry.id === id
+      && entry.contextKey === contextKey && entry.expiresAt > now());
+  }
+
   router.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
   router.post('/code', async (req, res, next) => {
@@ -91,5 +98,5 @@ export function createYouTubePairing({ youtubeAuth, origin = null, now = Date.no
     return res.json({ connected: false });
   });
 
-  return { router, device, secureRequest };
+  return { router, device, isDeviceActive, secureRequest };
 }

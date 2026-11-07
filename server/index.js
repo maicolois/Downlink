@@ -44,6 +44,7 @@ import {
 import { createInstagramAuth } from '@/server/auth/instagram-auth.js';
 import { createYouTubeAuth, isYouTubeLocalRequest } from '@/server/auth/youtube-auth.js';
 import { createYouTubePairing } from '@/server/auth/youtube-pairing.js';
+import { createDownloadAccess } from '@/server/auth/download-access.js';
 import { MP3_QUALITIES, getMp3BitrateFromQuality } from '@/shared/mp3-qualities.js';
 import { mountIosEmbeddedAssets } from '@/ios-embedded/server.js';
 import { createHttpCompression } from '@/server/middleware/http-compression.js';
@@ -292,6 +293,7 @@ const youtubeAuth = createYouTubeAuth({
   },
 });
 youtubePairing = createYouTubePairing({ youtubeAuth, origin: iosLanConfig?.origin });
+const downloadAccess = createDownloadAccess({ pairing: youtubePairing, youtubeAuth });
 
 // Carpeta temporal para descargas
 const DOWNLOADS_DIR = path.join(PROJECT_ROOT, 'downloads');
@@ -1146,6 +1148,7 @@ app.get('/api/status/:jobId', (req, res) => {
   }
 
   res.setHeader('Cache-Control', 'no-store');
+  const fileAccess = downloadAccess.issue(job);
   res.json({
     status: job.status,
     progress: job.progress,
@@ -1154,6 +1157,7 @@ app.get('/api/status/:jobId', (req, res) => {
     format: job.format,
     error: job.error,
     code: job.errorCode || null,
+    ...(fileAccess ? { fileAccess } : {}),
   });
 });
 
@@ -1193,7 +1197,7 @@ app.post('/api/cancel/:jobId', async (req, res) => {
 app.get('/api/file/:jobId', (req, res) => {
   const job = jobs.get(req.params.jobId);
 
-  if (!job || !canReadJob(req, job)) {
+  if (!job || (!canReadJob(req, job) && !downloadAccess.permits(req, job))) {
     return res.status(404).json({ error: 'Job no encontrado' });
   }
 
@@ -1222,6 +1226,7 @@ app.get('/api/file/:jobId', (req, res) => {
 
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Content-Length', stat.size);
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${safeFilename}`);
 
