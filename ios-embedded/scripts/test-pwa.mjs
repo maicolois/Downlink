@@ -25,9 +25,14 @@ let starts = 0;
 let files = 0;
 let lastJob;
 let sessionReads = 0;
+let pairedYouTubeSession = false;
 app.get('/api/instagram/session', (_req, res) => {
   sessionReads += 1;
   res.json({ available: false, connected: false, pending: false });
+});
+app.get('/api/youtube/session', (_req, res, next) => {
+  if (!pairedYouTubeSession) return next();
+  return res.json({ available: true, remote: true, connected: true });
 });
 app.post('/api/info', (req, res) => res.json({
   url: req.body.url, platform: 'youtube', title: 'Vídeo de prueba · Downlink', channel: 'Prueba local',
@@ -39,6 +44,9 @@ app.post('/api/download', (req, res) => {
   const jobId = randomUUID();
   lastJob = { status: 'downloading', format: req.body.format, filename: `downlink.${req.body.format}`,
     progress: '40%', progressDetail: 'Preparando archivo de prueba' };
+  if (req.body.youtubeBrowser === 'chrome') {
+    lastJob.fileAccess = { token: 'K'.repeat(43), expiresAt: Date.now() + 60_000 };
+  }
   jobs.set(jobId, lastJob);
   res.json({ jobId });
 });
@@ -54,6 +62,9 @@ app.post('/api/cancel/:id', (req, res) => {
 app.get('/api/file/:id', (req, res) => {
   const job = jobs.get(req.params.id);
   if (!job) return res.sendStatus(404);
+  // Model an installed iOS app handing the file to a separate Safari cookie
+  // store: a protected download must work with its file grant alone.
+  if (job.fileAccess && req.query.access !== job.fileAccess.token) return res.sendStatus(404);
   files += 1;
   res.set('Cache-Control', 'private, no-store');
   res.attachment(job.filename);
@@ -775,6 +786,35 @@ async function instagramCompactFitChecks(browser, name) {
   console.log(`${name}: compact Instagram states, errors and account actions fit without scrolling`);
 }
 
+async function youtubePairedDownloadChecks(browser, name) {
+  const context = await browser.newContext({ ...devices['iPhone 13'], reducedMotion: 'reduce', acceptDownloads: true });
+  try {
+    const page = await context.newPage();
+    pairedYouTubeSession = true;
+    await page.goto(base);
+    await page.locator('#urlInput').fill('https://youtu.be/bUlzyFz-1fo');
+    await page.locator('#resultsPanel.visible').waitFor();
+    const previousStarts = starts;
+    await page.locator('#downloadBtn').click();
+    await waitUntil(() => starts === previousStarts + 1);
+    assert.ok(lastJob?.fileAccess, 'The protected job needs a scoped file grant');
+    const fileCount = files;
+    lastJob.status = 'ready';
+    await page.waitForFunction(() => document.querySelector('#downloadBtnText').textContent === 'Guardar MP4');
+    await waitUntil(() => files > fileCount);
+    assert.match(await page.locator('#completeText').innerText(), /Si no aparece la descarga/);
+    assert.equal(await page.evaluate(() => JSON.stringify(localStorage).includes('K'.repeat(43))), false,
+      'The scoped file grant must not be saved in browser storage');
+    const afterAutomatic = files;
+    await page.locator('#downloadBtn').click();
+    await waitUntil(() => files > afterAutomatic);
+  } finally {
+    await context.close();
+    pairedYouTubeSession = false;
+  }
+  console.log(`${name}: paired YouTube files reach the download window without shared cookies`);
+}
+
 async function mobileChecks(browser, name) {
   const context = await browser.newContext({ ...devices['iPhone 13'], reducedMotion: 'reduce', acceptDownloads: true });
   await context.addInitScript(() => {
@@ -1009,7 +1049,10 @@ try {
   await fallback.page.screenshot({ path: path.join(output, 'iphone-background-fallback.png'), fullPage: true });
   await fallbackContext.close();
   console.log('Opaque desktop black, contour contrast and the no-WebGL fallback verified');
-  if (!process.argv.includes('--webkit-only')) await mobileChecks(chrome, 'chromium-iphone');
+  if (!process.argv.includes('--webkit-only')) {
+    await youtubePairedDownloadChecks(chrome, 'Chrome');
+    await mobileChecks(chrome, 'chromium-iphone');
+  }
   safari = await webkit.launch();
   await overlayEntranceChecks(safari, 'WebKit');
   await disclosureResizeChecks(safari, 'WebKit');
@@ -1017,6 +1060,7 @@ try {
   await youtubeExtensionGuideChecks(safari, 'WebKit');
   await youtubeExpandedFitChecks(safari, 'WebKit');
   await instagramCompactFitChecks(safari, 'WebKit');
+  await youtubePairedDownloadChecks(safari, 'WebKit');
   await mobileChecks(safari, 'webkit-iphone');
 } finally {
   await chrome?.close();

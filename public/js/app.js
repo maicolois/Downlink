@@ -752,9 +752,17 @@ function clearDownloadReference() {
 
 async function savePreparedDownload() {
   if (!preparedDownload) return;
+  const prepared = preparedDownload;
   try {
-    await saveDownload(preparedDownload.jobId, preparedDownload.filename);
-    completeText.textContent = 'Descarga iniciada · Revisa Descargas en Safari o Archivos';
+    if (prepared.fileAccess && prepared.fileAccess.expiresAt <= Date.now()) {
+      const response = await apiFetch(`/api/status/${prepared.jobId}`, { cache: 'no-store' });
+      const status = response.ok ? await response.json() : null;
+      if (!status?.fileAccess) throw new Error('No se pudo renovar el acceso al archivo.');
+      if (preparedDownload !== prepared) return;
+      prepared.fileAccess = status.fileAccess;
+    }
+    await saveDownload(prepared.jobId, prepared.filename, prepared.fileAccess);
+    completeText.textContent = 'Archivo listo · Si no aparece la descarga, pulsa Guardar';
   } catch {
     showError('No se pudo abrir el archivo. Pulsa Guardar para intentarlo de nuevo.');
   }
@@ -911,7 +919,7 @@ async function downloadFile() {
     const filename = status.filename || `download.${status.format}`;
     const manualSave = !isNativeApp() && (isIOSBrowser() || Boolean(resume));
     const saved = manualSave ? null : await saveDownload(jobId, filename);
-    if (manualSave) preparedDownload = { jobId, filename, format: status.format };
+    if (manualSave) preparedDownload = { jobId, filename, format: status.format, fileAccess: status.fileAccess || null };
     else downloadSession.clear(jobId);
 
     // 4. Mostrar éxito

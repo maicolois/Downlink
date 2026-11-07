@@ -32,15 +32,18 @@ export function readClipboard(environment = globalThis) {
   return clipboard.readText.call(clipboard);
 }
 
-export async function saveDownload(jobId, filename) {
+export async function saveDownload(jobId, filename, fileAccess = null) {
   if (globalThis.DownlinkNative) return globalThis.DownlinkNative.saveDownload(jobId);
   const link = document.createElement('a');
-  link.href = `/api/file/${encodeURIComponent(jobId)}`;
+  const token = fileAccess?.token;
+  const query = typeof token === 'string' && /^[A-Za-z0-9_-]{43}$/.test(token)
+    ? `?access=${encodeURIComponent(token)}` : '';
+  link.href = `/api/file/${encodeURIComponent(jobId)}${query}`;
   link.download = filename;
   if (isIOSBrowser()) {
     // Let Safari own the download without replacing the converter page.
     link.target = '_blank';
-    link.rel = 'noopener';
+    link.rel = 'noopener noreferrer';
   }
   link.style.display = 'none';
   document.body.appendChild(link);

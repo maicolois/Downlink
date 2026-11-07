@@ -94,7 +94,7 @@ El botón de tres puntos contiene **Sesión de YouTube** y **Conectar Instagram*
 ## Descargar y reabrir
 
 - Pega un enlace, selecciona MP4 o MP3 y la calidad, y pulsa **Descargar**.
-- Cuando el servidor termine, Downlink abrirá automáticamente por primera vez la confirmación de descarga del propio Safari. Si la cancelas, el botón **Guardar MP4/MP3** seguirá disponible para volver a abrirla más tarde. Según el archivo y la versión de iOS, utiliza Descargas o Compartir → Guardar en Archivos. El mensaje indica que se ha iniciado la entrega, no que iOS ya haya guardado el archivo.
+- Cuando el servidor termine, Downlink intentará abrir automáticamente la confirmación de descarga de Safari. Si iOS no la muestra o la cancelas, pulsa **Guardar MP4/MP3** para intentarlo de nuevo. Según el archivo y la versión de iOS, utiliza Descargas o Compartir → Guardar en Archivos. El mensaje indica que el archivo está preparado; el guardado depende de la confirmación de iOS.
 - Si cierras la web después de que el servidor haya devuelto el identificador de trabajo, la próxima apertura recupera ese trabajo en el mismo navegador o instalación. No comienza otra conversión.
 - Si se pierde la conexión, aparece **Retomar descarga**. Al recuperar la conexión o volver a la app se vuelve a consultar el trabajo.
 - El servidor puede seguir convirtiendo mientras iOS suspende la interfaz. El guardado en el teléfono necesita que aceptes la confirmación del sistema o pulses **Guardar MP4/MP3**.
