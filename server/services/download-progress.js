@@ -22,6 +22,14 @@ export const YT_DLP_PROGRESS_ARGS = Object.freeze([
   `download:${PROGRESS_PREFIX}%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s`
 ]);
 
+// A live snapshot has a known number of fragments but no known byte size.
+// yt-dlp's byte-based percentage and ETA for it are therefore misleading.
+export const YT_DLP_LIVE_PROGRESS_ARGS = Object.freeze([
+  '--newline', '--progress', '--progress-delta', '0.5', '--no-colors',
+  '--progress-template',
+  'download:downlink-live-progress:%(info.format_id)s|%(info.vcodec)s|%(progress.status)s|%(progress._speed_str)s|%(progress.fragment_index)s|%(progress.fragment_count)s',
+]);
+
 function formatDecimal(value) {
   return value
     .toFixed(1)
@@ -85,6 +93,19 @@ export function formatDownloadProgress(speed, eta) {
   return details.join(' · ');
 }
 
+// An FFmpeg conversion is local processing, not a network download. Reuse
+// only its estimated remaining time, without presenting its output-write rate
+// as download speed. Keep the stage label when no estimate is available.
+export function formatConversionProgress(label, progress) {
+  const stage = String(label || '').trim();
+  if (!stage || progress?.finalizing) return stage;
+  const detail = String(progress?.detail || '');
+  const estimate = detail.split(' · ').find(part =>
+    /^\d+ (?:h|min|s)(?: \d+ (?:h|min|s))* restantes$/.test(part));
+  if (!estimate) return stage;
+  return `${stage.replace(/(?:\.\.\.|…)$/, '').trim()} · ${estimate} aprox.`;
+}
+
 export function parseYtDlpProgress(line) {
   const text = String(line || '');
   const marker = text.indexOf(PROGRESS_PREFIX);
@@ -107,6 +128,80 @@ export function parseYtDlpProgress(line) {
       ? 'Finalizando archivo...'
       : formatDownloadProgress(rawSpeed.trim(), rawEta.trim()),
     finalizing
+  };
+}
+
+/** Show progress within the current track; yt-dlp downloads video and audio separately. */
+export function createYouTubeLiveProgressParser({ now = () => performance.now() } = {}) {
+  const marker = 'downlink-live-progress:';
+  let lastTrack = null;
+  let lastPercent = null;
+  let samples = [];
+  let lastCount = null;
+  let highestFragment = 0;
+  return line => {
+    const text = String(line || '');
+    const offset = text.indexOf(marker);
+    if (offset < 0) return null;
+    const [formatId = '', codec = '', status = '', speed = '', rawIndex = '', rawCount = ''] = text
+      .slice(offset + marker.length).trim().split('|').map(value => value.trim());
+    const isAudio = codec.toLowerCase() === 'none';
+    const track = isAudio ? 'audio' : 'vídeo';
+    const trackKey = `${formatId}|${track}`;
+    if (trackKey !== lastTrack) {
+      lastTrack = trackKey;
+      lastPercent = null;
+      samples = [];
+      lastCount = null;
+      highestFragment = 0;
+    }
+    const index = /^\d+$/.test(rawIndex) ? Number(rawIndex) : NaN;
+    const count = /^\d+$/.test(rawCount) ? Number(rawCount) : NaN;
+    if (Number.isSafeInteger(index) && Number.isSafeInteger(count) && count > 0 && index <= count) {
+      // fragment_index can identify a fragment currently being downloaded.
+      const completed = Math.min(99, Math.floor(Math.max(0, index - 1) / count * 100));
+      lastPercent = Math.max(lastPercent ?? 0, completed);
+      const timestamp = now();
+      if (lastCount !== count) {
+        samples = [];
+        lastCount = count;
+        highestFragment = 0;
+      }
+      const fragment = highestFragment = Math.max(highestFragment, index - 1, 0);
+      const latest = samples.at(-1);
+      if (!latest || timestamp < latest.time || timestamp - latest.time > 15_000) {
+        samples = [{ time: timestamp, fragment }];
+      } else if (fragment > latest.fragment) {
+        samples.push({ time: timestamp, fragment });
+      }
+      while (samples.length > 2 && timestamp - samples[0].time > 30_000) samples.shift();
+    } else if (status === 'finished') {
+      lastPercent = 99;
+    }
+    if (samples.length && now() - samples.at(-1).time > 15_000) samples = [];
+    const formattedSpeed = formatDownloadSpeed(speed);
+    let remaining = '';
+    if (status !== 'finished') {
+      const first = samples[0];
+      const latest = samples.at(-1);
+      const elapsed = latest && first ? (latest.time - first.time) / 1000 : 0;
+      const transferred = latest && first ? latest.fragment - first.fragment : 0;
+      if (elapsed >= 3 && transferred >= 3 && lastCount > latest.fragment) {
+        const seconds = Math.max(1, Math.ceil((lastCount - latest.fragment) * elapsed / transferred));
+        if (Number.isSafeInteger(seconds)) {
+          remaining = formatRemainingTime(`${Math.floor(seconds / 3600)}:${Math.floor(seconds / 60) % 60}:${seconds % 60}`);
+        }
+      }
+    }
+    const remainingDetail = status === 'finished' ? '' : remaining
+      ? ` · Tiempo restante del ${track}: ${remaining} aprox.`
+      : ` · Tiempo restante del ${track}: calculando...`;
+    return {
+      progress: lastPercent === null ? null : `${lastPercent}%`,
+      detail: `Descargando ${track}${formattedSpeed ? ` · Velocidad: ${formattedSpeed}` : ''}${remainingDetail}`,
+      // The first finished event only completes one track, not the whole job.
+      finalizing: false,
+    };
   };
 }
 

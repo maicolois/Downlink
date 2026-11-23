@@ -6,23 +6,19 @@ function normalized(value) {
   return String(value || '').trim().toLowerCase();
 }
 
-export function buildCompatibleMp4FormatSelector(quality) {
+export function buildMp4FormatSelector(quality) {
   const heightFilter = quality === 'best' ? '' : `[height<=${quality}]`;
-  const bestVideo = `bestvideo${heightFilter}`;
+  const bestVideo = `bestvideo*${heightFilter}`;
   const best = `best${heightFilter}`;
 
-  // Prefer streams that can be remuxed for Apple devices without a lengthy
-  // video conversion. The final fallbacks retain support for sites that do not
-  // expose codec metadata or do not offer H.264 at the requested resolution.
+  // Pick quality before codec. An H.264-first alternative can silently select
+  // 1080p when VP9/AV1 provides 4K, even for an original MP4. Compatibility is
+  // handled after downloading, without reducing the selected resolution.
+  // The * also considers higher-resolution formats that already contain audio.
   return [
-    `${bestVideo}[vcodec^=avc1]+bestaudio[ext=m4a]`,
-    `${bestVideo}[vcodec^=h264]+bestaudio[acodec^=aac]`,
-    `${bestVideo}[vcodec^=avc1]+bestaudio`,
-    `${bestVideo}[vcodec^=h264]+bestaudio`,
     `${bestVideo}+bestaudio`,
     best,
     bestVideo,
-    'best',
   ].join('/');
 }
 

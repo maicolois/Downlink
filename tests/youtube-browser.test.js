@@ -32,6 +32,9 @@ test('uses only the temporary Chrome bridge jar when one is provided', () => {
     '--extractor-args', 'youtube:skip=hls,dash',
     '--cookies', 'C:\\Temp\\downlink-youtube\\cookies.txt',
   ]);
+  assert.deepEqual(provider.getInfoYtDlpArgs({ includeStreamingFormats: true }), [
+    '--ignore-config', '--cookies', 'C:\\Temp\\downlink-youtube\\cookies.txt',
+  ]);
   assert.deepEqual(provider.getYtDlpArgs(), [
     '--ignore-config', '--cookies', 'C:\\Temp\\downlink-youtube\\cookies.txt',
   ]);
@@ -121,6 +124,22 @@ test('distinguishes YouTube access, availability, format and network errors', ()
 test('diagnoses the actual error instead of an unrelated yt-dlp warning', () => {
   const message = 'WARNING: This video is age-restricted; some formats may be missing\nERROR: [youtube] Requested format is not available';
   assert.equal(getYouTubeError(new Error(message)).code, 'YOUTUBE_FORMAT_UNAVAILABLE');
+});
+
+test('explains concrete download and processing failures without leaking their details', () => {
+  const examples = [
+    ['ERROR: write failed: No space left on device', 'YOUTUBE_DISK_FULL'],
+    ['ERROR: fragment 42 not found, unable to continue', 'YOUTUBE_FRAGMENT_UNAVAILABLE'],
+    ['El MP4 descargado no contiene una pista de vídeo.', 'YOUTUBE_OUTPUT_INCOMPLETE'],
+    ['No se pudo generar el archivo MP4.', 'YOUTUBE_OUTPUT_INCOMPLETE'],
+    ['ERROR: Postprocessing: ffmpeg exited with code 1', 'YOUTUBE_PROCESSING_FAILED'],
+    ['Conversion failed!', 'YOUTUBE_PROCESSING_FAILED'],
+  ];
+  for (const [message, code] of examples) {
+    const result = getYouTubeError(new Error(`${message}\nhttps://example.test/?token=secret`));
+    assert.equal(result?.code, code, message);
+    assert.doesNotMatch(result.error, /secret|example\.test/);
+  }
 });
 
 test('does not claim that a missing browser profile is a locked database', () => {

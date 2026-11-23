@@ -119,6 +119,36 @@ function absolutizePlaylist(lines, playlistUrl) {
   }).join('\n');
 }
 
+function preparePlaylistResult(text, parsed, playlistUrl, details = {}) {
+  // Freeze an open EVENT playlist at the exact fragments fetched for this
+  // request. A local ENDLIST makes downloaders start at the beginning and
+  // stop at this boundary even while the stream continues.
+  const frozen = !parsed.lines.some(line => /^#EXT-X-ENDLIST\s*$/i.test(line.trim()));
+  if (frozen && !parsed.segments.length) throw new Error('La playlist de Twitch no contiene fragmentos disponibles.');
+  let playlist = text;
+  if (frozen || details.changed) {
+    const lines = frozen
+      ? parsed.lines.filter(line => !/^#EXT-X-START:/i.test(line.trim()))
+      : [...parsed.lines];
+    if (frozen) {
+      const typeIndex = lines.findIndex(line => /^#EXT-X-PLAYLIST-TYPE:/i.test(line.trim()));
+      if (typeIndex >= 0) lines[typeIndex] = '#EXT-X-PLAYLIST-TYPE:VOD';
+      lines.push('#EXT-X-ENDLIST');
+    }
+    playlist = absolutizePlaylist(lines, playlistUrl);
+  }
+  return {
+    changed: false,
+    mutedCount: 0,
+    replacedCount: 0,
+    unavailableCount: 0,
+    ...details,
+    frozen,
+    duration: frozen ? parsed.segments.reduce((sum, segment) => sum + segment.duration, 0) : null,
+    playlist,
+  };
+}
+
 async function findSilentAudioIndices(audioPlaylistUrl, fetchImpl, concurrency) {
   const text = await fetchText(audioPlaylistUrl, fetchImpl);
   const { segments } = parsePlaylist(text, audioPlaylistUrl);
@@ -147,6 +177,7 @@ export async function buildTwitchUnmutedPlaylist({
   const uniquePlaylistUrls = [...new Set([playlistUrl, ...candidatePlaylistUrls].filter(Boolean))];
   const text = await fetchText(playlistUrl, fetchImpl);
   const parsed = parsePlaylist(text, playlistUrl);
+  if (!/^\s*#EXTM3U(?:\s|$)/i.test(text)) throw new Error('La playlist de Twitch no es válida.');
   const markedMutedIndices = parsed.segments.flatMap((segment, index) => (
     MUTED_SEGMENT.test(segment.reference) ? [index] : []
   ));
@@ -154,27 +185,32 @@ export async function buildTwitchUnmutedPlaylist({
   let mutedIndices = markedMutedIndices;
   let markedMuted = true;
   if (!mutedIndices.length && audioPlaylistUrl && DVR_PLAYLIST.test(playlistUrl)) {
-    mutedIndices = await findSilentAudioIndices(audioPlaylistUrl, fetchImpl, concurrency);
+    try {
+      mutedIndices = await findSilentAudioIndices(audioPlaylistUrl, fetchImpl, concurrency);
+    } catch {
+      // Muted-audio recovery is optional; the original snapshot still must be
+      // bounded rather than falling back to an open live playlist.
+      return preparePlaylistResult(text, parsed, playlistUrl);
+    }
     markedMuted = false;
   }
 
   if (!mutedIndices.length) {
-    return {
-      changed: false,
-      mutedCount: 0,
-      replacedCount: 0,
-      unavailableCount: 0,
-      playlist: text,
-    };
+    return preparePlaylistResult(text, parsed, playlistUrl);
   }
 
   if (mutedIndices.some(index => !parsed.segments[index])) {
-    throw new Error('Las playlists de vídeo y audio de Twitch no contienen los mismos fragmentos.');
+    return preparePlaylistResult(text, parsed, playlistUrl);
   }
   const mutedSegments = mutedIndices.map(index => parsed.segments[index]);
-  const replacements = await mapConcurrent(mutedSegments, concurrency, segment => (
-    findAvailableReplacement(segment, uniquePlaylistUrls, fetchImpl, markedMuted)
-  ));
+  let replacements;
+  try {
+    replacements = await mapConcurrent(mutedSegments, concurrency, segment => (
+      findAvailableReplacement(segment, uniquePlaylistUrls, fetchImpl, markedMuted)
+    ));
+  } catch {
+    return preparePlaylistResult(text, parsed, playlistUrl, { mutedCount: mutedSegments.length });
+  }
   const unavailable = replacements.filter(replacement => !replacement).length;
 
   mutedSegments.forEach((segment, index) => {
@@ -183,13 +219,12 @@ export async function buildTwitchUnmutedPlaylist({
     if (replacements[index]) parsed.lines[segment.lineIndex] = replacements[index];
   });
 
-  return {
+  return preparePlaylistResult(text, parsed, playlistUrl, {
     changed: replacements.some(Boolean),
     mutedCount: mutedSegments.length,
     replacedCount: replacements.length - unavailable,
     unavailableCount: unavailable,
-    playlist: absolutizePlaylist(parsed.lines, playlistUrl),
-  };
+  });
 }
 
 export function isTwitchMediaPlaylist(value) {

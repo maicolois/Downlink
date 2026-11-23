@@ -23,6 +23,43 @@ function createFetch(routes) {
   };
 }
 
+test('freezes an ongoing event at the fetched edge and makes every URI absolute', async () => {
+  const url = 'https://video-edge.example/vod/chunked/index-dvr.m3u8';
+  const playlist = [
+    '#EXTM3U', '#EXT-X-PLAYLIST-TYPE:EVENT', '#EXT-X-MEDIA-SEQUENCE:0', '#EXT-X-START:TIME-OFFSET=-30',
+    '#EXT-X-KEY:METHOD=AES-128,URI="key.bin"',
+    '#EXTINF:10.0,', '0.ts', '#EXTINF:9.5,', '1.ts',
+  ].join('\n');
+  const result = await buildTwitchUnmutedPlaylist({ playlistUrl: url, fetchImpl: createFetch(new Map([[url, mockResponse(200, playlist)]])) });
+  assert.equal(result.frozen, true);
+  assert.equal(result.changed, false);
+  assert.equal(result.duration, 19.5);
+  assert.match(result.playlist, /#EXT-X-PLAYLIST-TYPE:VOD/);
+  assert.doesNotMatch(result.playlist, /#EXT-X-START/);
+  assert.match(result.playlist, /#EXT-X-ENDLIST\s*$/);
+  assert.match(result.playlist, /https:\/\/video-edge\.example\/vod\/chunked\/0\.ts/);
+  assert.match(result.playlist, /URI="https:\/\/video-edge\.example\/vod\/chunked\/key\.bin"/);
+});
+
+test('audio probe failure still returns a finite original event', async () => {
+  const url = 'https://video-edge.example/vod/chunked/index-dvr.m3u8';
+  const playlist = '#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:10,\n0.ts';
+  const result = await buildTwitchUnmutedPlaylist({
+    playlistUrl: url, audioPlaylistUrl: audio,
+    fetchImpl: createFetch(new Map([[url, mockResponse(200, playlist)]])),
+  });
+  assert.equal(result.frozen, true);
+  assert.match(result.playlist, /#EXT-X-ENDLIST\s*$/);
+  assert.match(result.playlist, /chunked\/0\.ts/);
+});
+
+test('rejects an open playlist without media instead of starting an endless download', async () => {
+  const url = 'https://video-edge.example/vod/chunked/index-dvr.m3u8';
+  await assert.rejects(buildTwitchUnmutedPlaylist({
+    playlistUrl: url, fetchImpl: createFetch(new Map([[url, mockResponse(200, '#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT')]])),
+  }), /no contiene fragmentos/);
+});
+
 test('replaces each marked fragment like the extension and falls back to a lower quality', async () => {
   const playlist = [
     '#EXTM3U',

@@ -2,15 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildAppleCompatibleMp4Args,
-  buildCompatibleMp4FormatSelector,
+  buildMp4FormatSelector,
   inspectAppleMp4Compatibility,
 } from '@/server/services/mp4-compatibility.js';
 
-test('prefers H.264 and AAC while retaining a generic format fallback', () => {
-  const selector = buildCompatibleMp4FormatSelector('1080');
-  assert.match(selector, /bestvideo\[height<=1080\]\[vcodec\^=avc1\]\+bestaudio\[ext=m4a\]/);
-  assert.match(selector, /bestvideo\[height<=1080\]\+bestaudio/);
-  assert.match(selector, /\/best$/);
+test('keeps the resolution ceiling on every fallback without preferring a codec', () => {
+  const selector = buildMp4FormatSelector('1080');
+  assert.ok(selector.split('/').every(part => part.includes('[height<=1080]')));
+  assert.doesNotMatch(selector, /vcodec|acodec/);
+  assert.doesNotMatch(buildMp4FormatSelector('best'), /height/);
 });
 
 test('recognizes an iPhone-compatible H.264 and AAC MP4', () => {

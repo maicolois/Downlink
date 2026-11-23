@@ -1,11 +1,11 @@
 // Bump this version whenever the app shell changes. Updates activate after the
 // existing windows close, so an in-progress download is never forcibly reloaded.
-const CACHE = 'downlink-shell-v45';
+const CACHE = 'downlink-shell-v49';
 const SHELL = [
   '/', '/index.html', '/manifest.webmanifest',
   '/css/main.css', '/css/options-menu.css', '/css/pwa.css',
   '/js/app.js', '/js/platform.js', '/js/pwa.js', '/js/download-session.js',
-  '/js/homepage.js', '/js/fetch-with-retry.js',
+  '/js/homepage.js', '/js/fetch-with-retry.js', '/js/download-retry.js',
   '/js/components/options-menu.js', '/js/components/instagram-account.js', '/js/components/youtube-account.js',
   '/js/components/overlay-motion.js',
   '/js/components/disclosure-motion.js',

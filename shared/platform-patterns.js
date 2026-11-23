@@ -2,6 +2,7 @@ import { INSTAGRAM_STORY_URL_PATTERNS } from '@/shared/instagram-stories.js';
 
 export const YOUTUBE_URL_PATTERNS = [
   /^(https?:\/\/)?(www\.)?youtube\.com\/watch\?v=[\w-]{11}/,
+  /^(https?:\/\/)?(?:www\.|m\.)?youtube\.com\/live\/[\w-]{11}\/?(?:[?#][^\s]*)?$/i,
   /^(https?:\/\/)?(www\.)?youtube\.com\/shorts\/[\w-]{11}/,
   /^(https?:\/\/)?youtu\.be\/[\w-]{11}/,
   /^(https?:\/\/)?(www\.)?youtube\.com\/embed\/[\w-]{11}/,

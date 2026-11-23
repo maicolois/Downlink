@@ -6,6 +6,23 @@ export const isIOSBrowser = () => !isNativeApp() && (
   || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 );
 
+// Unknown and native clients keep the compatibility conversion. A tablet can
+// present itself as desktop Safari, so check its touch capability first.
+export function getMp4Target(environment = globalThis) {
+  const nav = environment.navigator;
+  if (environment.DownlinkNative || !nav) return 'compatible';
+  const ua = String(nav.userAgent || '');
+  const platform = String(nav.platform || '');
+  if (nav.userAgentData?.mobile === true
+      || /^(?:Android|iOS)$/i.test(String(nav.userAgentData?.platform || ''))
+      || /iPhone|iPad|iPod|Android/i.test(platform)
+      || /Android|iPhone|iPad|iPod|Mobile|Tablet|Windows Phone|SmartTV|Smart-TV/i.test(ua)
+      || (/MacIntel/i.test(platform) && Number(nav.maxTouchPoints) > 1)) {
+    return 'compatible';
+  }
+  return /Windows NT|Macintosh|X11|Linux|CrOS/i.test(ua) ? 'original' : 'compatible';
+}
+
 export function apiFetch(input, init) {
   return globalThis.DownlinkNative
     ? globalThis.DownlinkNative.fetch(input, init)

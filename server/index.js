@@ -31,15 +31,22 @@ import {
 } from '@/server/platforms/common/video-metadata.js';
 import {
   createFfmpegProgressParser,
+  createYouTubeLiveProgressParser,
+  formatConversionProgress,
   formatDownloadProgress,
   isDownloadDurationComplete,
   parseYtDlpProgress,
   YT_DLP_PROGRESS_ARGS,
+  YT_DLP_LIVE_PROGRESS_ARGS,
 } from '@/server/services/download-progress.js';
 import { getYtDlpInfoOutput } from '@/server/services/yt-dlp-result.js';
+import { hasFaststartMp4 } from '@/server/services/mp4-faststart.js';
+import { resolveMp4Target } from '@/server/services/mp4-target.js';
+import { isRefreshableLiveFragmentError, isTerminalLiveDownloadError, runLiveDownloadWithRetry } from '@/server/services/live-download-retry.js';
+import { createYouTubeLiveSnapshot, refreshYouTubeLiveSnapshot } from '@/server/platforms/youtube/youtube-live-snapshot.js';
 import {
   buildAppleCompatibleMp4Args,
-  buildCompatibleMp4FormatSelector,
+  buildMp4FormatSelector,
 } from '@/server/services/mp4-compatibility.js';
 import { createInstagramAuth } from '@/server/auth/instagram-auth.js';
 import { createYouTubeAuth, isYouTubeLocalRequest } from '@/server/auth/youtube-auth.js';
@@ -386,6 +393,14 @@ function removeJobFiles(job, retries = 4) {
   }
 }
 
+async function removeLiveSnapshot(job) {
+  const snapshot = job.liveSnapshotData;
+  job.liveSnapshotData = null;
+  job.liveRetryInfo = null;
+  job.liveRetryable = false;
+  try { await snapshot?.cleanup?.(); } catch { /* Best-effort cleanup of private metadata. */ }
+}
+
 function cancelledJobError() {
   return Object.assign(new Error('Descarga cancelada.'), { code: 'JOB_CANCELLED' });
 }
@@ -403,6 +418,7 @@ async function revokeInstagramConnection(context) {
     revokedJobs.push(job);
     for (const stream of job.streams || []) stream.destroy();
     removeJobFiles(job);
+    terminating.push(removeLiveSnapshot(job));
     jobs.delete(id);
   }
   await Promise.allSettled(terminating);
@@ -418,6 +434,7 @@ async function revokeYouTubeConnection(context) {
     revokedJobs.push(job);
     for (const stream of job.streams || []) stream.destroy();
     removeJobFiles(job);
+    terminating.push(removeLiveSnapshot(job));
     jobs.delete(id);
   }
   await Promise.allSettled(terminating);
@@ -553,11 +570,11 @@ async function getVideoInfo(provider, url, instagramContext = null, job = null, 
   if (pending) return pending;
 
   const request = (async () => {
-    const extract = extractionProvider => runYtDlp([
+    const extract = (extractionProvider, includeStreamingFormats = false) => runYtDlp([
       '--dump-single-json',
       '--no-playlist',
       '--no-warnings',
-      ...extractionProvider.getInfoYtDlpArgs({ url: normalizedUrl }),
+      ...extractionProvider.getInfoYtDlpArgs({ url: normalizedUrl, includeStreamingFormats }),
       normalizedUrl
     ], {
       allowPartialPlaylist: provider.name === 'instagram' && !storySource,
@@ -565,9 +582,17 @@ async function getVideoInfo(provider, url, instagramContext = null, job = null, 
       youtubeContext,
       job,
     });
-    const raw = instagramContext
-      ? await instagramAuth.withCookieFile(instagramContext, cookiesFile => extract(new InstagramProvider({ cookiesFile })))
-      : await extract(provider);
+    let raw;
+    try {
+      raw = instagramContext
+        ? await instagramAuth.withCookieFile(instagramContext, cookiesFile => extract(new InstagramProvider({ cookiesFile })))
+        : await extract(provider);
+    } catch (error) {
+      if (provider.name !== 'youtube' || !/no video formats found/i.test(error.message)) throw error;
+      assertJobActive(job);
+      assertYouTubeConnection(youtubeContext);
+      raw = await extract(provider, true);
+    }
     assertJobActive(job);
     assertInstagramConnection(instagramContext);
     assertYouTubeConnection(youtubeContext);
@@ -584,6 +609,7 @@ async function getVideoInfo(provider, url, instagramContext = null, job = null, 
         duration,
         duration_string: duration !== null ? formatDuration(duration) : (info.duration_string || ''),
         channel: info.channel || info.uploader || 'Desconocido',
+        isLive: info.is_live === true,
         view_count: getViewCount(info),
         videoFormats: getVideoFormats(info),
         ...(info.downlink_audio_url ? { audioSourceUrl: info.downlink_audio_url } : {})
@@ -602,7 +628,7 @@ async function getVideoInfo(provider, url, instagramContext = null, job = null, 
     // Active stories can expire or be added while a profile is open.
     // Authenticated metadata never enters the shared cache or request pool.
     assertJobActive(job);
-    if (!privateExtraction) cacheInfo(cacheKey, value, storySource ? 30_000 : INFO_CACHE_TTL_MS);
+    if (!privateExtraction && !videos.some(video => video.isLive)) cacheInfo(cacheKey, value, storySource ? 30_000 : INFO_CACHE_TTL_MS);
     return value;
   })();
 
@@ -677,7 +703,7 @@ app.post('/api/info', async (req, res) => {
 
 // ─── POST /api/download — Iniciar descarga en background ───────────────────────
 app.post('/api/download', async (req, res) => {
-  const { url, format, quality, playlistItem, videoId, youtubeBrowser } = req.body;
+  const { url, format, quality, playlistItem, videoId, youtubeBrowser, mp4Target } = req.body;
 
   const baseProvider = platformRegistry.findByUrl(url);
   if (!baseProvider) {
@@ -710,6 +736,9 @@ app.post('/api/download', async (req, res) => {
 
   if (!format || !['mp3', 'mp4'].includes(format)) {
     return res.status(400).json({ error: 'Formato no válido. Usa mp3 o mp4.' });
+  }
+  if (mp4Target !== undefined && !['original', 'compatible'].includes(mp4Target)) {
+    return res.status(400).json({ error: 'Destino de MP4 no válido.' });
   }
 
   const storySource = provider.name === 'instagram' ? getInstagramStorySource(url) : null;
@@ -745,6 +774,11 @@ app.post('/api/download', async (req, res) => {
     progress: '0%',
     progressDetail: 'Analizando el vídeo...',
     format,
+    mp4Target: resolveMp4Target({
+      requestedTarget: mp4Target,
+      userAgent: req.get('User-Agent'),
+      mobileHint: req.get('Sec-CH-UA-Mobile'),
+    }),
     quality: selectedQuality,
     playlistItem: selectedPlaylistItem,
     videoId: storySource ? videoId : null,
@@ -789,7 +823,7 @@ async function startDownloadJob(job) {
       await performDownloadJob(job, configureRequestProvider(platformRegistry.findByUrl(job.url), job.youtubeBrowser));
     }
   } catch (error) {
-    failDownloadJob(job, error);
+    failDownloadJob(job, error, { preserveLive: Boolean(job.liveSnapshotData) });
   }
 }
 
@@ -805,11 +839,13 @@ function runJobProcess(job, executable, args, label) {
     job.process = proc;
     let stderr = '';
     const parseFfmpegProgress = createFfmpegProgressParser({ duration: job.duration });
+    const parseLiveProgress = job.liveSnapshot && label === 'yt-dlp'
+      ? createYouTubeLiveProgressParser() : null;
 
     for (const stream of [proc.stdout, proc.stderr]) {
       if (!stream) continue;
       createInterface({ input: stream, crlfDelay: Infinity })
-        .on('line', line => parseProgress(job, line, parseFfmpegProgress));
+        .on('line', line => parseProgress(job, line, parseFfmpegProgress, parseLiveProgress));
     }
     proc.stderr?.on('data', data => {
       stderr += data.toString();
@@ -833,12 +869,13 @@ function runJobProcess(job, executable, args, label) {
 
 async function performDownloadJob(job, provider) {
   let preparedDownload = null;
+  let liveSnapshot = job.liveSnapshotData || null;
   try {
     assertJobActive(job);
     // 1. Obtener título
     console.log(`[Job ${job.id.slice(0, 8)}] Starting: format=${job.format}, quality=${job.quality}`);
     assertInstagramConnection(job.instagramContext);
-    const info = await getVideoInfo(provider, job.url, job.instagramContext, job, job.youtubeContext);
+    const info = job.liveRetryInfo || await getVideoInfo(provider, job.url, job.instagramContext, job, job.youtubeContext);
     assertJobActive(job);
     const selectedVideoIndex = Array.isArray(info.videos)
       ? info.videos.findIndex(video => video.playlistItem === job.playlistItem)
@@ -865,8 +902,57 @@ async function performDownloadJob(job, provider) {
       jobId: job.id,
     });
     assertJobActive(job);
+    if (provider.name === 'twitch' && Number.isFinite(preparedDownload.duration) && preparedDownload.duration > 0) {
+      // An ongoing event's length changes; progress and completeness must use
+      // the same frozen playlist that the downloader will actually read.
+      job.duration = preparedDownload.duration;
+    }
     const downloadUrl = preparedDownload.url;
     providerArgs.push(...(preparedDownload.ytDlpArgs || []));
+    let downloadInput = [downloadUrl];
+    let refreshLiveUrls = null;
+    if (provider.name === 'youtube' && (selectedVideo.isLive || liveSnapshot)) {
+      job.progressDetail = 'Preparando lo emitido hasta ahora...';
+      const extractionArgs = [...providerArgs];
+      const extractLiveInfo = () => runYtDlp([
+        '--dump-single-json', '--no-playlist', '--no-warnings', '--live-from-start',
+        ...extractionArgs, downloadUrl,
+      ], { job, youtubeContext: job.youtubeContext });
+      refreshLiveUrls = async () => {
+        assertJobActive(job);
+        assertYouTubeConnection(job.youtubeContext);
+        const freshInfo = await extractLiveInfo();
+        assertJobActive(job);
+        assertYouTubeConnection(job.youtubeContext);
+        await refreshYouTubeLiveSnapshot(liveSnapshot.infoFile, freshInfo, {
+          checkCancelled: () => assertJobActive(job),
+        });
+      };
+      if (!liveSnapshot) {
+        const liveInfo = await extractLiveInfo();
+        assertJobActive(job);
+        try {
+          liveSnapshot = await createYouTubeLiveSnapshot(liveInfo, {
+            checkCancelled: () => assertJobActive(job),
+          });
+        } catch (error) {
+          if (!error.code) error.code = 'YOUTUBE_LIVE_SNAPSHOT_FAILED';
+          throw error;
+        }
+        job.liveSnapshotData = liveSnapshot;
+        job.liveRetryInfo = info;
+      } else {
+        // Signed fragment URLs may expire while a job waits for manual retry.
+        // Refresh credentials but keep the exact previously frozen cutoff.
+        await refreshLiveUrls();
+      }
+      assertJobActive(job);
+      job.liveSnapshot = true;
+      // Historical live streams contain thousands of small segments. Download
+      // a few in parallel without changing the already frozen snapshot edge.
+      providerArgs.push('--abort-on-unavailable-fragments', '--concurrent-fragments', '4');
+      downloadInput = ['--load-info-json', liveSnapshot.infoFile];
+    }
     const carouselSuffix = job.isInstagramStory
       ? ` - ${job.videoId}`
       : (selectedVideoIndex >= 0 ? ` - Vídeo ${selectedVideoIndex + 1}` : '');
@@ -883,6 +969,20 @@ async function performDownloadJob(job, provider) {
     const executable = await getYtDlpExecutable();
     assertJobActive(job);
 
+    const downloadWithYtDlp = args => liveSnapshot
+      ? runLiveDownloadWithRetry(() => runJobProcess(job, executable, args, 'yt-dlp'), {
+          checkCancelled: () => assertJobActive(job),
+          maxTotalRetries: 20,
+          getProgress: () => job.liveProgressCheckpoint ?? 0,
+          shouldRetry: error => isRefreshableLiveFragmentError(error) || !isTerminalLiveDownloadError(error),
+          onRetry: async ({ attempt, maxRetries, error }) => {
+            job.status = 'downloading';
+            job.progressDetail = `Reintentando la descarga sin perder el avance (${attempt}/${maxRetries})...`;
+            if (isRefreshableLiveFragmentError(error)) await refreshLiveUrls();
+          },
+        })
+      : runJobProcess(job, executable, args, 'yt-dlp');
+
     let ytArgs;
     let tempAudioPath = null;
     let finalFilePath = path.join(DOWNLOADS_DIR, `${job.id}.%(ext)s`);
@@ -894,18 +994,18 @@ async function performDownloadJob(job, provider) {
         '-f', 'bestaudio/best',
         '--no-playlist',
         '--no-warnings',
-        ...YT_DLP_PROGRESS_ARGS,
+        ...(liveSnapshot ? YT_DLP_LIVE_PROGRESS_ARGS : YT_DLP_PROGRESS_ARGS),
         '--ffmpeg-location', ffmpegLocation,
         '-o', tempAudioPath,
         ...providerArgs,
-        downloadUrl
+        ...downloadInput
       ];
 
       finalFilePath = path.join(DOWNLOADS_DIR, `${job.id}.mp3`);
 
       console.log(`[Job ${job.id.slice(0, 8)}] Preparing MP3 (bitrate ${bitrate}k)`);
 
-      await runJobProcess(job, executable, ytArgs, 'yt-dlp');
+      await downloadWithYtDlp(ytArgs);
       assertJobActive(job);
 
       const tempFiles = fs.readdirSync(DOWNLOADS_DIR).filter(f => f.startsWith(`${job.id}.audio.`));
@@ -944,21 +1044,21 @@ async function performDownloadJob(job, provider) {
       job.filename = `${safeTitle}.mp3`;
     } else {
       ytArgs = [
-        '-f', buildCompatibleMp4FormatSelector(job.quality),
+        '-f', buildMp4FormatSelector(preparedDownload.qualityPreselected ? 'best' : job.quality),
         '--merge-output-format', 'mp4',
         '--recode-video', 'mp4',
         '--no-playlist',
         '--no-warnings',
-        ...YT_DLP_PROGRESS_ARGS,
+        ...(liveSnapshot ? YT_DLP_LIVE_PROGRESS_ARGS : YT_DLP_PROGRESS_ARGS),
         '--ffmpeg-location', ffmpegLocation,
         '-o', finalFilePath,
         ...providerArgs,
-        downloadUrl
+        ...downloadInput
       ];
 
       console.log(`[Job ${job.id.slice(0, 8)}] Preparing MP4`);
 
-      await runJobProcess(job, executable, ytArgs, 'yt-dlp');
+      await downloadWithYtDlp(ytArgs);
       assertJobActive(job);
 
       job.filePath = path.join(DOWNLOADS_DIR, `${job.id}.mp4`);
@@ -975,19 +1075,24 @@ async function performDownloadJob(job, provider) {
         outputPath: compatiblePath,
         streams,
       });
-      job.status = 'converting';
-      job.progress = '99%';
-      job.ffmpegProgressDetail = compatibility.compatible
-        ? 'Optimizando MP4 para iPhone...'
-        : 'Convirtiendo a H.264 para iPhone...';
-      job.progressDetail = job.ffmpegProgressDetail;
-      try {
-        await runJobProcess(job, LOCAL_FFMPEG_PATH, compatibilityArgs, 'ffmpeg');
-      } finally {
-        delete job.ffmpegProgressDetail;
-      }
+      const alreadyOptimized = job.mp4Target === 'original'
+        || (job.liveSnapshot && compatibility.compatible && await hasFaststartMp4(job.filePath));
       assertJobActive(job);
-      replaceCompletedFile(job.filePath, compatiblePath);
+      if (!alreadyOptimized) {
+        job.status = 'converting';
+        job.progress = '99%';
+        job.ffmpegProgressDetail = compatibility.compatible
+          ? 'Optimizando MP4...'
+          : 'Preparando MP4 compatible...';
+        job.progressDetail = job.ffmpegProgressDetail;
+        try {
+          await runJobProcess(job, LOCAL_FFMPEG_PATH, compatibilityArgs, 'ffmpeg');
+        } finally {
+          delete job.ffmpegProgressDetail;
+        }
+        assertJobActive(job);
+        replaceCompletedFile(job.filePath, compatiblePath);
+      }
       job.finalExtension = '.mp4';
       job.filename = `${safeTitle}.mp4`;
     }
@@ -1015,13 +1120,14 @@ async function performDownloadJob(job, provider) {
     console.log(`[Job ${job.id.slice(0, 8)}] Completed: ${job.filename} (${sizeMB} MB)`);
 
   } catch (err) {
-    failDownloadJob(job, err);
+    failDownloadJob(job, err, { preserveLive: Boolean(job.liveSnapshotData) });
   } finally {
+    if (!job.liveRetryable) await removeLiveSnapshot(job);
     try { await preparedDownload?.cleanup?.(); } catch { /* Temporary manifests are best-effort cleanup. */ }
   }
 }
 
-function failDownloadJob(job, err) {
+function failDownloadJob(job, err, { preserveLive = false } = {}) {
   if (job.cancelled || err.code === 'JOB_CANCELLED') {
     job.cancelled = true;
     job.status = 'cancelled';
@@ -1036,6 +1142,9 @@ function failDownloadJob(job, err) {
   job.status = 'error';
   const youtubeError = job.platform === 'youtube' ? getYouTubeError(err, { browser: job.youtubeBrowser }) : null;
   job.errorCode = youtubeError?.code || null;
+  const fragmentMatch = String(err.message || '').match(/\bfragment\s+(\d+)\s+(?:is\s+)?(?:not\s+found|unavailable|missing)/i);
+  job.failedFragment = fragmentMatch && Number.isSafeInteger(Number(fragmentMatch[1]))
+    ? Number(fragmentMatch[1]) : null;
   job.error = youtubeError?.error || (job.platform === 'youtube'
     ? 'No se pudo preparar este vídeo. YouTube o el conversor no han indicado una causa reconocible; comprueba el enlace y vuelve a intentarlo.'
     : err.code === 'INSTAGRAM_SESSION_EXPIRED' ? err.message : (job.isInstagramStory || job.instagramContext)
@@ -1043,15 +1152,40 @@ function failDownloadJob(job, err) {
     : (err.message || 'Error al descargar. Verifica que yt-dlp y ffmpeg estén instalados.'));
   job.process = null;
 
-  // Limpiar archivos parciales
-  try { removeJobFiles(job); } catch { /* ignore */ }
+  // Keep the exact frozen cutoff and partial tracks for an explicit retry.
+  // Cancellation and account revocation always discard them instead.
+  job.liveRetryable = preserveLive && !job.revoked && Boolean(job.liveSnapshotData);
+  job.lastActivity = Date.now();
+  if (!job.liveRetryable) {
+    try { removeJobFiles(job); } catch { /* ignore */ }
+  }
 }
 
 // ─── Parsear progreso de yt-dlp ─────────────────────────────────────────────────
-function parseProgress(job, line, parseFfmpegProgress) {
+function parseProgress(job, line, parseFfmpegProgress, parseLiveProgress = null) {
   if (!line || !line.trim()) return;
   if (job.cancelled) return;
   job.lastActivity = Date.now();
+
+  if (parseLiveProgress) {
+    const fragment = line.match(/downlink-live-progress:[^|]*\|([^|]*)\|[^|]*\|[^|]*\|(\d+)\|(\d+)/);
+    if (fragment) {
+      const index = Number(fragment[2]);
+      const count = Number(fragment[3]);
+      if (Number.isSafeInteger(index) && Number.isSafeInteger(count) && index <= count && count < 1_000_000_000) {
+        const checkpoint = (fragment[1].trim().toLowerCase() === 'none' ? 1_000_000_000 : 0) + index;
+        job.liveProgressCheckpoint = Math.max(job.liveProgressCheckpoint ?? 0, checkpoint);
+      }
+    }
+  }
+
+  const liveProgress = parseLiveProgress?.(line);
+  if (liveProgress) {
+    if (liveProgress.progress) job.progress = liveProgress.progress;
+    job.progressDetail = liveProgress.detail;
+    job.status = 'downloading';
+    return;
+  }
 
   const templatedProgress = parseYtDlpProgress(line);
   if (templatedProgress) {
@@ -1064,7 +1198,9 @@ function parseProgress(job, line, parseFfmpegProgress) {
   const ffmpegProgress = parseFfmpegProgress(line);
   if (ffmpegProgress) {
     if (ffmpegProgress.progress) job.progress = ffmpegProgress.progress;
-    job.progressDetail = job.ffmpegProgressDetail || ffmpegProgress.detail;
+    job.progressDetail = job.ffmpegProgressDetail
+      ? formatConversionProgress(job.ffmpegProgressDetail, ffmpegProgress)
+      : ffmpegProgress.detail;
     job.status = job.ffmpegProgressDetail
       ? 'converting'
       : (ffmpegProgress.finalizing ? 'converting' : 'downloading');
@@ -1106,7 +1242,7 @@ function parseProgress(job, line, parseFfmpegProgress) {
   if (line.includes('[Merger]') || line.includes('Merging formats')) {
     job.status = 'converting';
     job.progress = '99%';
-    job.progressDetail = 'Uniendo vídeo y audio...';
+    job.progressDetail = 'Uniendo vídeo y audio... Puede tardar varios minutos.';
     return;
   }
 
@@ -1157,8 +1293,33 @@ app.get('/api/status/:jobId', (req, res) => {
     format: job.format,
     error: job.error,
     code: job.errorCode || null,
+    retryable: Boolean(job.liveRetryable),
+    ...(Number.isSafeInteger(job.failedFragment) ? { failedFragment: job.failedFragment } : {}),
     ...(fileAccess ? { fileAccess } : {}),
   });
+});
+
+app.post('/api/retry/:jobId', async (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job || !canReadJob(req, job)) return res.status(404).json({ error: 'Job no encontrado' });
+  if (job.status !== 'error' || !job.liveRetryable || !job.liveSnapshotData) {
+    return res.status(409).json({ error: 'Esta descarga no se puede reintentar.' });
+  }
+  // Wait for the previous worker's finally block before reusing its files.
+  await job.workerPromise;
+  if (jobs.get(job.id) !== job || !canReadJob(req, job)) return res.status(404).json({ error: 'Job no encontrado' });
+  if (job.status !== 'error' || !job.liveRetryable || !job.liveSnapshotData) {
+    return res.status(409).json({ error: 'Esta descarga no se puede reintentar.' });
+  }
+  job.liveRetryable = false;
+  job.error = null;
+  job.errorCode = null;
+  job.failedFragment = null;
+  job.status = 'starting';
+  job.progressDetail = 'Retomando la descarga conservada...';
+  job.lastActivity = Date.now();
+  job.workerPromise = startDownloadJob(job);
+  return res.json({ jobId: job.id });
 });
 
 app.post('/api/cancel/:jobId', async (req, res) => {
@@ -1170,7 +1331,7 @@ app.post('/api/cancel/:jobId', async (req, res) => {
   if (job.status === 'cancelled') {
     return res.json({ status: 'cancelled' });
   }
-  if (job.status === 'error') {
+  if (job.status === 'error' && !job.liveRetryable) {
     return res.status(409).json({ error: job.error || 'La descarga ya terminó con un error.' });
   }
 
@@ -1189,6 +1350,7 @@ app.post('/api/cancel/:jobId', async (req, res) => {
     ]);
   }
   removeJobFiles(job);
+  await removeLiveSnapshot(job);
   job.progressDetail = 'Descarga cancelada';
   return res.json({ status: 'cancelled' });
 });
@@ -1273,6 +1435,7 @@ setInterval(() => {
       job.cancelled = true;
       if (job.process) void terminateConverter(job.process);
       try { removeJobFiles(job); } catch { /* ignore */ }
+      void removeLiveSnapshot(job);
       jobs.delete(id);
       console.log(`[Cleanup] Deleted old job: ${id.slice(0, 8)}`);
     }
@@ -1282,6 +1445,10 @@ setInterval(() => {
   try {
     const files = fs.readdirSync(DOWNLOADS_DIR);
     for (const file of files) {
+      // An active or retained job can have a completed track older than four
+      // hours while another track is still downloading or waiting for retry.
+      const ownerId = file.slice(0, 36);
+      if (file.startsWith(`${ownerId}.`) && jobs.has(ownerId)) continue;
       const filePath = path.join(DOWNLOADS_DIR, file);
       const stat = fs.statSync(filePath);
       if (now - stat.mtimeMs > 240 * 60 * 1000) {
@@ -1333,6 +1500,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     void Promise.allSettled([
       instagramAuth.dispose(),
       youtubeAuth.dispose(),
+      ...[...jobs.values()].map(removeLiveSnapshot),
     ]).finally(() => process.exit(0));
   });
 }

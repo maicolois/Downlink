@@ -20,6 +20,19 @@ function getAudioSourceUrl(formats) {
   return audio?.is_downlink_direct ? audio.url : null;
 }
 
+function isTwitchVodUrl(value) {
+  try {
+    const raw = String(value || '');
+    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    const host = url.hostname.toLowerCase();
+    if (host === 'player.twitch.tv') return /^v?\d+$/i.test(url.searchParams.get('video') || '');
+    if (!/^(?:(?:www|go|m)\.)?twitch\.tv$/i.test(host)) return false;
+    return /^\/(?:videos\/\d+|[^/]+\/v(?:ideo)?\/\d+)\/?$/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 export async function serveTwitchPlaylist(playlist, token = randomUUID()) {
   const body = Buffer.from(String(playlist), 'utf8');
   const requestPath = `/${encodeURIComponent(token)}.m3u8`;
@@ -121,7 +134,9 @@ export class TwitchProvider extends PlatformProvider {
   }
 
   getDownloadUrl({ url, format, quality, video } = {}) {
-    if (format === 'mp3') return video?.audioSourceUrl || url;
+    if (format === 'mp3') {
+      return video?.audioSourceUrl || video?.videoFormats?.find(candidate => candidate.sourceUrl)?.sourceUrl || url;
+    }
     if (format !== 'mp4') return url;
     const candidates = video?.videoFormats || [];
     const selected = quality === 'best'
@@ -134,8 +149,17 @@ export class TwitchProvider extends PlatformProvider {
     const downloadUrl = this.getDownloadUrl(options);
     const fallback = { url: downloadUrl, ytDlpArgs: [], cleanup: null };
     if (!isTwitchMediaPlaylist(downloadUrl)) {
+      if (isTwitchVodUrl(options.url)) {
+        // Resolving an unknown VOD inside yt-dlp could hand FFmpeg an open
+        // EVENT playlist that never ends. Require a snapshot-capable source.
+        throw new Error('No se pudo obtener la lista de fragmentos de Twitch para preparar esta descarga. Vuelve a analizar el enlace.');
+      }
       return fallback;
     }
+
+    // The direct media playlist already identifies one rendition. It does not
+    // advertise the height again when yt-dlp reads it as a generic HLS URL.
+    if (options.format === 'mp4') fallback.qualityPreselected = true;
 
     try {
       const videoFormats = options.video?.videoFormats || [];
@@ -150,18 +174,20 @@ export class TwitchProvider extends PlatformProvider {
         candidatePlaylistUrls,
         audioPlaylistUrl: options.video?.audioSourceUrl || null,
       });
-      if (!prepared.changed) return fallback;
+      if (!prepared.changed && !prepared.frozen) return fallback;
 
       const served = await serveTwitchPlaylist(prepared.playlist, options.jobId || randomUUID());
       return {
         url: served.url,
         ytDlpArgs: [],
+        ...(options.format === 'mp4' ? { qualityPreselected: true } : {}),
+        ...(prepared.frozen ? { duration: prepared.duration } : {}),
         cleanup: served.cleanup,
       };
-    } catch {
-      // Audio recovery is best effort. Twitch's original URL remains a valid
-      // download source even if probing or preparing a local playlist fails.
-      return fallback;
+    } catch (error) {
+      // Do not fall back to an open EVENT playlist: it would keep recording
+      // instead of producing the requested finite capture.
+      throw new Error('No se pudo preparar la lista de fragmentos de Twitch. Vuelve a intentarlo.', { cause: error });
     }
   }
 }

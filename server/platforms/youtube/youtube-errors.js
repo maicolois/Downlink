@@ -10,6 +10,9 @@ function browserCookieDecryptionFailed(message) {
 }
 
 export function getYouTubeError(error, { browser = null } = {}) {
+  if (error?.code === 'YOUTUBE_LIVE_SNAPSHOT_FAILED') {
+    return { status: 422, code: error.code, error: error.message };
+  }
   if (typeof error?.code === 'string' && error.code.startsWith('YOUTUBE_CHROME_')) {
     return {
       status: Number.isInteger(error.status) ? error.status : 401,
@@ -102,6 +105,18 @@ export function getYouTubeError(error, { browser = null } = {}) {
   }
   if (/timed?\s*out|temporary\s+failure\s+in\s+name\s+resolution|unable\s+to\s+resolve|connection\s+(?:reset|refused)|network\s+is\s+unreachable/i.test(message)) {
     return { status: 503, code: 'YOUTUBE_NETWORK_ERROR', error: 'No se pudo conectar con YouTube. Comprueba tu conexión a Internet y vuelve a intentarlo.' };
+  }
+  if (/\bENOSPC\b|no\s+space\s+left\s+on\s+device|not\s+enough\s+(?:disk\s+)?space|disk\s+(?:is\s+)?full|espacio\s+insuficiente/i.test(message)) {
+    return { status: 507, code: 'YOUTUBE_DISK_FULL', error: 'No hay suficiente espacio disponible para terminar la descarga y preparar el archivo. Libera espacio y vuelve a intentarlo.' };
+  }
+  if (/fragment\s+\d+\s+(?:is\s+)?(?:not\s+found|unavailable|missing)|(?:missing|unavailable)\s+fragment\b/i.test(message)) {
+    return { status: 422, code: 'YOUTUBE_FRAGMENT_UNAVAILABLE', error: 'No se ha podido descargar un fragmento del vídeo. Puede que YouTube ya no lo ofrezca; vuelve a analizar el enlace y prueba de nuevo.' };
+  }
+  if (/el\s+mp4\s+descargado\s+no\s+contiene\s+una\s+pista\s+de\s+vídeo|no\s+se\s+pudo\s+generar\s+el\s+archivo\s+mp4|no\s+se\s+pudo\s+obtener\s+el\s+audio\s+base/i.test(message)) {
+    return { status: 422, code: 'YOUTUBE_OUTPUT_INCOMPLETE', error: 'La descarga terminó sin generar las pistas necesarias. Vuelve a intentarlo; si vuelve a fallar, prueba otra calidad.' };
+  }
+  if (/conversion\s+failed|(?:ffmpeg|ffprobe)\s+exited\s+with\s+code|no\s+se\s+pudo\s+iniciar\s+ffmpeg|\bpostprocessing:/i.test(message)) {
+    return { status: 500, code: 'YOUTUBE_PROCESSING_FAILED', error: 'No se pudo convertir o unir el archivo descargado. Comprueba que las herramientas de conversión funcionan y que hay espacio suficiente.' };
   }
   if (/video\s+unavailable|this\s+content\s+isn.t\s+available/i.test(message)) {
     return { status: 404, code: 'YOUTUBE_UNAVAILABLE', error: 'YouTube indica que el vídeo no está disponible, pero no ha explicado la causa. Abre el enlace en YouTube para comprobarlo.' };

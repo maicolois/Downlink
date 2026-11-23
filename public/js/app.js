@@ -9,8 +9,9 @@ import { initializeYouTubeAccount } from '@/public/js/components/youtube-account
 import { initializeOptionsMenu } from '@/public/js/components/options-menu.js';
 import { createQualityGridController } from '@/public/js/components/quality-grid.js';
 import { fetchWithRetry } from '@/public/js/fetch-with-retry.js';
+import { retryRetainedDownload } from '@/public/js/download-retry.js';
 import {
-  apiFetch, canReadClipboard, isNativeApp, isIOSBrowser, readClipboard, saveDownload,
+  apiFetch, canReadClipboard, getMp4Target, isNativeApp, isIOSBrowser, readClipboard, saveDownload,
 } from '@/public/js/platform.js';
 import { createDownloadSession } from '@/ios-embedded/public/js/download-session.js';
 import { initializePwa } from '@/ios-embedded/public/js/pwa.js';
@@ -520,7 +521,7 @@ function renderSelectedVideo(animate = false, direction = 1) {
 
   videoCard.classList.toggle('is-story', isStory);
   updateVideoThumbnail(video, animate, direction);
-  videoDuration.textContent = formatDurationWithUnits(video.duration, video.duration_string);
+  videoDuration.textContent = video.isLive ? 'EN DIRECTO' : formatDurationWithUnits(video.duration, video.duration_string);
   videoTitle.textContent = isStory && storySource?.username && storySource.kind !== 'highlight'
     ? `Story de @${storySource.username}`
     : video.title || (isStory ? 'Story de Instagram' : 'Sin título');
@@ -663,7 +664,8 @@ function updateDownloadBtn() {
     : videos.length > 1 ? ` · Vídeo ${currentCarouselIndex + 1}` : '';
   if (downloadBtnText) {
     downloadBtnText.textContent = preparedDownload ? `Guardar ${preparedDownload.format.toUpperCase()}`
-      : resumableDownload ? 'Retomar descarga'
+      : resumableDownload?.retry ? 'Reintentar descarga'
+        : resumableDownload ? 'Retomar descarga'
         : `Descargar ${formatLabel}${carouselLabel}`;
   }
 }
@@ -811,6 +813,7 @@ async function downloadFile() {
   if (!selectedVideo) return;
   const resume = resumableDownload;
   let canResume = false;
+  let retryPending = Boolean(resume?.retry);
 
   isDownloading = true;
   currentDownloadJobId = null;
@@ -843,6 +846,7 @@ async function downloadFile() {
           url: currentVideoInfo.url,
           format: currentFormat,
           quality: currentQuality,
+          mp4Target: getMp4Target(),
           youtubeBrowser: youtubeAccount.getBrowser(),
           playlistItem: currentVideoInfo.platform === 'instagram' && !isInstagramStory()
             ? selectedVideo.playlistItem
@@ -863,6 +867,10 @@ async function downloadFile() {
       });
     }
     currentDownloadJobId = jobId;
+    if (retryPending) {
+      await retryRetainedDownload(jobId, { request: apiFetch, headers: instagramAccount.requestHeaders() });
+      retryPending = false;
+    }
     resumableDownload = null;
     console.log(`Download job started: ${jobId}, format: ${currentFormat}, quality: ${currentQuality}`);
 
@@ -903,7 +911,9 @@ async function downloadFile() {
 
       if (status.status === 'ready') break;
       if (status.status === 'cancelled') throw clientCancelledError();
-      if (status.status === 'error') throw Object.assign(new Error(status.error || 'Error al descargar'), { code: status.code });
+      if (status.status === 'error') throw Object.assign(new Error(status.error || 'Error al descargar'), {
+        code: status.code, retryable: status.retryable === true,
+      });
     }
 
     if (downloadCancelRequested) {
@@ -936,7 +946,9 @@ async function downloadFile() {
     }
 
   } catch (err) {
-    if (canResume && !downloadCancelRequested && currentDownloadJobId) {
+    if ((err.retryable || (retryPending && !err.permanent)) && !downloadCancelRequested && currentDownloadJobId) {
+      resumableDownload = { jobId: currentDownloadJobId, retry: true };
+    } else if (canResume && !downloadCancelRequested && currentDownloadJobId) {
       // The worker keeps running on the server. A retry only checks this job;
       // it must never POST another conversion after an interrupted connection.
       resumableDownload = { jobId: currentDownloadJobId };
@@ -952,8 +964,10 @@ async function downloadFile() {
     } else {
       downloadProgress.classList.remove('visible');
       cancelDownloadBtn.hidden = true;
-      showError(canResume ? 'Se ha perdido la conexión. Pulsa Retomar descarga cuando vuelva a estar disponible.' : err.message);
-      if (!canResume) offerYouTubeConnection(err.code, currentVideoInfo?.url);
+      showError(resumableDownload?.retry
+        ? `${err.code === 'YOUTUBE_FRAGMENT_UNAVAILABLE' ? 'No se pudo descargar un fragmento.' : 'La descarga se ha detenido.'} Pulsa Reintentar descarga para continuar con los archivos conservados.`
+        : canResume ? 'Se ha perdido la conexión. Pulsa Retomar descarga cuando vuelva a estar disponible.' : err.message);
+      if (!canResume && !resumableDownload?.retry) offerYouTubeConnection(err.code, currentVideoInfo?.url);
     }
   } finally {
     currentDownloadJobId = null;
@@ -1153,7 +1167,7 @@ syncBackgroundState();
 void restoreDownload();
 
 function resumeInterruptedDownload() {
-  if (resumableDownload && !isDownloading && !document.hidden && navigator.onLine) void downloadFile();
+  if (resumableDownload && !resumableDownload.retry && !isDownloading && !document.hidden && navigator.onLine) void downloadFile();
 }
 window.addEventListener('online', resumeInterruptedDownload);
 window.addEventListener('pageshow', resumeInterruptedDownload);

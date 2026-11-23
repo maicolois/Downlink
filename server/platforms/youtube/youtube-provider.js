@@ -26,13 +26,13 @@ export class YouTubeProvider extends PlatformProvider {
       : getYouTubeBrowserArgs(this.browser);
   }
 
-  getInfoYtDlpArgs() {
+  getInfoYtDlpArgs({ includeStreamingFormats = false } = {}) {
     // Direct formats already contain the available resolutions. Avoid parsing
     // streaming manifests during metadata-only requests to return them sooner.
     return [
       '--ignore-config',
       ...this.getRuntimeArgs(),
-      '--extractor-args', 'youtube:skip=hls,dash',
+      ...(includeStreamingFormats ? [] : ['--extractor-args', 'youtube:skip=hls,dash']),
       ...this.getAuthArgs(),
     ];
   }

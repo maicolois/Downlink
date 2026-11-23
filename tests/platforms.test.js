@@ -17,6 +17,9 @@ const registry = new PlatformRegistry([
 
 const accepted = [
   ['youtube', 'https://www.youtube.com/watch?v=abcdefghijk'],
+  ['youtube', 'https://www.youtube.com/live/biUVW6Q0f2g?si=U9XTFgDZNimuFSXB'],
+  ['youtube', 'https://m.youtube.com/live/biUVW6Q0f2g'],
+  ['youtube', 'youtube.com/live/biUVW6Q0f2g/'],
   ['x', 'https://x.com/example/status/123456789'],
   ['instagram', 'https://www.instagram.com/reel/Chunk8-jurw/?igsh=abc'],
   ['instagram', 'https://instagram.com/p/ABC_123/'],
@@ -62,6 +65,9 @@ for (const [platform, url] of accepted) {
 test('rejects unsupported profiles, Instagram routes and unrelated URLs', () => {
   for (const url of [
     '', null, {}, 'https://example.com/reel/ABC/',
+    'https://www.youtube.com/live/too-short',
+    'https://www.youtube.com/live/biUVW6Q0f2gextra',
+    'https://www.youtube.com/live/biUVW6Q0f2g/extra',
     'https://www.instagram.com/explore/',
     'https://www.instagram.com/accounts/',
     'https://www.instagram.com/stories/',

@@ -4,6 +4,15 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import fs from 'node:fs';
 
+const realFetch = globalThis.fetch;
+globalThis.fetch = (input, init) => {
+  const url = new URL(typeof input === 'string' ? input : input.url);
+  if (url.hostname === 'fixture.twitch.test') {
+    return Promise.resolve(new Response('#EXTM3U\n#EXTINF:60,\n0.ts\n#EXT-X-ENDLIST\n'));
+  }
+  return realFetch(input, init);
+};
+
 childProcess.spawn = (executable, args) => {
   if (executable !== 'cancellable-test-extractor') {
     throw new Error(`Unexpected subprocess in cancellation test: ${executable}`);
@@ -46,10 +55,13 @@ childProcess.spawn = (executable, args) => {
           channel: 'Fixture',
           duration: 60,
           thumbnail: '',
-          formats: [
-            { ext: 'mp4', vcodec: 'h264', acodec: 'none', width: 1920, height: 1080 },
-            { ext: 'm4a', vcodec: 'none', acodec: 'aac' }
-          ]
+          formats: args.at(-1).includes('twitch.tv')
+            ? [{ ext: 'mp4', vcodec: 'h264', acodec: 'aac', width: 1920, height: 1080,
+                protocol: 'm3u8_native', url: 'https://fixture.twitch.test/vod/chunked/index-dvr.m3u8' }]
+            : [
+                { ext: 'mp4', vcodec: 'h264', acodec: 'none', width: 1920, height: 1080 },
+                { ext: 'm4a', vcodec: 'none', acodec: 'aac' }
+              ]
         }));
         close(0);
       };
@@ -69,7 +81,7 @@ childProcess.spawn = (executable, args) => {
     fs.writeFileSync(partialPath, 'partial download');
     let percent = 1;
     timer = setInterval(() => {
-      if (args.at(-1).includes('twitch.tv')) {
+      if (args.includes('--downloader')) {
         // Child-process chunks can split both FFmpeg keys and values.
         proc.stderr.write('total_si');
         proc.stderr.write('ze=3000000\r\nout_time=00:00:');
